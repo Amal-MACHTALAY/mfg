@@ -126,7 +126,6 @@ def Fapp(w): # Ignoring the forward-backward coupling  parts
     return FF
 
 
-# xglo = None
 def get_preconditioner(a):
     Jac=nd.Jacobian(Fapp)
     J1=Jac(a)
@@ -135,8 +134,6 @@ def get_preconditioner(a):
     # matrix-vector product -> LinearOperator 
     M_x = lambda r: J1_ilu.solve(r)
     M = spla.LinearOperator(J1.shape, M_x)
-
-
     return M
     
 
