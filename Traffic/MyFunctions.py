@@ -17,13 +17,21 @@ from matplotlib import cm
 def U(rho): # Greenshields desired speed
     return u_max*(1-rho/rho_jam)
 
-def f_star(p,r): # p=Vx
+def f_mfg(u,r):
+    if costf=="LWR":
+        return 0.5*((U(r)-u)**2) # MFG-LWR
+    if costf=="Sep":
+        return 0.5*((u/u_max)**2)-(u/u_max)+(r/rho_jam) # MFG-Separable
+    if costf=="NonSep":
+        return 0.5*((u/u_max)**2)-(u/u_max)+((u*r)/(u_max*rho_jam)) # MFG-NonSeparable
+
+def f_star(p,r,u): # p=Vx
     if costf=="LWR":
         return -0.5*(p**2)+U(r)*p # MFG-LWR
     if costf=="Sep":
-        return r/rho_jam-0.5*(1-p*u_max)**2 # MFG-Separable
+        return u*p+f_mfg(u,r) # MFG-Separable
     if costf=="NonSep":
-        return (0.5-u_max**2)*((U(r)/(u_max**2)-p)**2) # MFG-NonSeparable
+        return u*p+f_mfg(u,r) # MFG-NonSeparable
 
 def f_star_p(p,r): # 0<=u<=u_max
     if costf=="LWR":
@@ -32,14 +40,13 @@ def f_star_p(p,r): # 0<=u<=u_max
     if costf=="Sep":
         return max(min(u_max*(1-p*u_max),u_max),0) # MFG-Separable
     if costf=="NonSep":
-        return max(min(-2*(0.5-u_max**2)*(U(r)/(u_max**2)-p),u_max),0) # MFG-NonSeparable
+        return max(min(u_max*(1-r/rho_jam-u_max*p),u_max),0) # MFG-NonSeparable
 
 def integral(a,b): 
     x2 = lambda x: rho_int(x)
     I=integrate.quad(x2, a, b)
-#     result=(1/dx)*max(min(I[0],rho_jam),0) # 0<  <=rho_jam
-    result=(1/dx)*I[0] # 0<  <=rho_jam
-    return result
+#     result=max(min(I[0],rho_jam),0) # 0<  <=rho_jam
+    return I[0]
 
 def rho_int(s): # initial density
     return rho_a+(rho_b-rho_a)*np.exp(-0.5*((s-0.5*L)/gama)**2) # 0<=rho<=rho_jam
@@ -60,9 +67,9 @@ def F(w):
         # F_u , F[2*Nt*Nx-Nt]->F[2*Nt*Nx-1] ********* 6
         FF[2*Nt*Nx-Nt+n]=w[2*Nt*Nx+Nx-Nt+n]-f_star_p((w[3*Nt*Nx+2*Nx-Nt+n]-w[3*Nt*Nx+2*Nx-2*Nt+n-1])/dx,w[Nt*Nx+Nx-Nt+n-1])
         # F_V , F[2*Nt*Nx]->F[2*Nt*Nx+Nt-1] *********** 7
-        FF[2*Nt*Nx+n]=w[(2*Nt+1)*Nx+n+1]-w[(2*Nt+1)*Nx+n]+dt*f_star(w[(2*Nt+1)*Nx+n+1]/dx,w[n])+ep2*(w[(2*Nt+1)*Nx+Nt+n+2]-2*w[(2*Nt+1)*Nx+n+1])
+        FF[2*Nt*Nx+n]=w[(2*Nt+1)*Nx+n+1]-w[(2*Nt+1)*Nx+n]+dt*f_star(w[(2*Nt+1)*Nx+n+1]/dx,w[n],w[Nt*Nx+Nx+n])+ep2*(w[(2*Nt+1)*Nx+Nt+n+2]-2*w[(2*Nt+1)*Nx+n+1])
         # F_V , F[3*Nt*Nx-Nt]->F[3*Nt*Nx-1] ********** 9
-        FF[3*Nt*Nx-Nt+n]=w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n]+dt*f_star((w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(Nx-1)*(Nt+1)+n])+ep2*(-2*w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])
+        FF[3*Nt*Nx-Nt+n]=w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n]+dt*f_star((w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(Nx-1)*(Nt+1)+n],w[2*Nt*Nx+Nx-Nt+n])+ep2*(-2*w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])
     for j in range(2,Nx):
         for n in range(0,Nt):
             # F_rho , F[Nt]->F[Nt*Nx-Nt-1] ************ 2
@@ -70,15 +77,15 @@ def F(w):
             # F_u , F[Nt*Nx+Nt]->F[2*Nt*Nx-Nt-1] *********** 5
             FF[(j-1)*Nt+Nt*Nx+n]=w[(Nt+1)*Nx+(j-1)*Nt+n]-f_star_p((w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(j-1)*(Nt+1)+n])
             # F_V , F[2*Nt*Nx+Nt]->F[3*Nt*Nx-Nt-1] ********* 8
-            FF[(j-1)*Nt+2*Nt*Nx+n]=w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n]+dt*f_star((w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(j-1)*(Nt+1)+n])+ep2*(w[(2*Nt+1)*Nx+j*(Nt+1)+n+1]-2*w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])
+            FF[(j-1)*Nt+2*Nt*Nx+n]=w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n]+dt*f_star((w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(j-1)*(Nt+1)+n],w[(Nt+1)*Nx+(j-1)*Nt+n])+ep2*(w[(2*Nt+1)*Nx+j*(Nt+1)+n+1]-2*w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])
         # F_rho_int , F[3*Nt*Nx+1]->F[3*Nt*Nx+Nx-2] ********** 11
-        FF[3*Nt*Nx+j-1]=w[(j-1)*(Nt+1)]-integral(x[j-1],x[j])
+        FF[3*Nt*Nx+j-1]=w[(j-1)*(Nt+1)]-(1/dx)*integral(x[j-1],x[j])
         # F_V_ter , F[3*Nt*Nx+Nx+1]->F[3*Nt*Nx+2*Nx-2] ********* 14
         FF[3*Nt*Nx+Nx+j-1]=w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+Nt]-VT(x[j])
     # F_rho_int , F[3*Nt*Nx] ********* 10
-    FF[3*Nt*Nx]=w[0]-integral(x[0],x[1])
+    FF[3*Nt*Nx]=w[0]-(1/dx)*integral(x[0],x[1])
     # F_rho_int , F[3*Nt*Nx+Nx-1] ********* 12
-    FF[3*Nt*Nx+Nx-1]=w[(Nx-1)*(Nt+1)]-integral(x[Nx-1],x[Nx])
+    FF[3*Nt*Nx+Nx-1]=w[(Nx-1)*(Nt+1)]-(1/dx)*integral(x[Nx-1],x[Nx])
     # F_V_ter , F[3*Nt*Nx+Nx] *********** 13 
     FF[3*Nt*Nx+Nx]=w[(2*Nt+1)*Nx+Nt]-VT(x[1])
     # F_V_ter , F[3*Nt*Nx+2*Nx-1] ************** 15
@@ -111,13 +118,13 @@ def Fapp(w): # Ignoring the forward-backward coupling  parts
             # F_V , F[2*Nt*Nx+Nt]->F[3*Nt*Nx-Nt-1] ********* 8
             FF[(j-1)*Nt+2*Nt*Nx+n]=w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n]+ep2*(w[(2*Nt+1)*Nx+j*(Nt+1)+n+1]-2*w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])
         # F_rho_int , F[3*Nt*Nx+1]->F[3*Nt*Nx+Nx-2] ********** 11
-        FF[3*Nt*Nx+j-1]=w[(j-1)*(Nt+1)]-integral(x[j-1],x[j])
+        FF[3*Nt*Nx+j-1]=w[(j-1)*(Nt+1)]-(1/dx)*integral(x[j-1],x[j])
         # F_V_ter , F[3*Nt*Nx+Nx+1]->F[3*Nt*Nx+2*Nx-2] ********* 14
         FF[3*Nt*Nx+Nx+j-1]=w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+Nt]-VT(x[j])
     # F_rho_int , F[3*Nt*Nx] ********* 10
-    FF[3*Nt*Nx]=w[0]-integral(x[0],x[1])
+    FF[3*Nt*Nx]=w[0]-(1/dx)*integral(x[0],x[1])
     # F_rho_int , F[3*Nt*Nx+Nx-1] ********* 12
-    FF[3*Nt*Nx+Nx-1]=w[(Nx-1)*(Nt+1)]-integral(x[Nx-1],x[Nx])
+    FF[3*Nt*Nx+Nx-1]=w[(Nx-1)*(Nt+1)]-(1/dx)*integral(x[Nx-1],x[Nx])
     # F_V_ter , F[3*Nt*Nx+Nx] *********** 13 
     FF[3*Nt*Nx+Nx]=w[(2*Nt+1)*Nx+Nt]-VT(x[1])
     # F_V_ter , F[3*Nt*Nx+2*Nx-1] ************** 15
@@ -126,6 +133,7 @@ def Fapp(w): # Ignoring the forward-backward coupling  parts
     return FF
 
 
+# xglo = None
 def get_preconditioner(a):
     Jac=nd.Jacobian(Fapp)
     J1=Jac(a)
@@ -134,6 +142,13 @@ def get_preconditioner(a):
     # matrix-vector product -> LinearOperator 
     M_x = lambda r: J1_ilu.solve(r)
     M = spla.LinearOperator(J1.shape, M_x)
+
+#     def xglobal( x, Fapp ):
+#             """ newton_krylov calls this at each iteration: xglo = x """
+#             global xglo
+#             xglo = x.copy()
+#     M.update = xglobal
+
     return M
     
 
@@ -171,9 +186,9 @@ def solution(sol,rho,u,V,Q):
 #     print("V=",V)
     return 0
 
-def plotting(text,t,x,rho,u,V,Q):
+def plotting(text,t,x,rho,u,V,Q,Nx_list,Error_list):
     tt, xx = np.meshgrid(t, x)
-    fig = plt.figure(figsize=(7, 5), dpi=100)
+    fig = plt.figure(figsize=(6, 5), dpi=100)
     ax = fig.gca(projection='3d')
     surf = ax.plot_surface(xx, tt, rho, cmap=cm.viridis)
     ax.set_xlabel('$x$')
@@ -183,7 +198,7 @@ def plotting(text,t,x,rho,u,V,Q):
     ax.text2D(0.05, 0.95, text, transform=ax.transAxes)
 
     plt.figure(figsize=(25, 5))
-    plt.subplot(1,3,1)
+    plt.subplot(1,4,1)
     plt.plot(x,rho[:,0],label='density')
     plt.plot(x,u[:,0],label='speed')
     plt.plot(x,V[:,0],label='Optimal cost')
@@ -191,7 +206,7 @@ def plotting(text,t,x,rho,u,V,Q):
     plt.grid()
     plt.title("t=0, T={T}".format(T=T))
     plt.xlabel('x')
-    plt.subplot(1,3,2)
+    plt.subplot(1,4,2)
     plt.plot(x,rho[:,Nt-1],label='density')
     plt.plot(x,u[:,Nt-1],label='speed')
     plt.plot(x,V[:,Nt-1],label='Optimal cost')
@@ -199,10 +214,30 @@ def plotting(text,t,x,rho,u,V,Q):
     plt.legend()
     plt.title("t={t}, T={T}".format(t=round(t[Nt-1],3),T=T))
     plt.xlabel('x')
-    plt.subplot(1,3,3)
+    plt.subplot(1,4,3)
     plt.plot(rho[:,Nt-1],Q[:,Nt-1],label='flow-density')
     plt.xlabel('density')
     plt.ylabel('Flow')
     plt.grid()
     plt.title("Fundamental diagram (T={T})".format(T=T))
+    plt.subplot(1,4,4)
+    plt.plot(Nx_list,Error_list,label='MFG-LWR')
+    plt.xlabel('Spatial grid size')
+    plt.ylabel('error')
+    plt.grid()
+    plt.title("convergence of solution algorithm")
     return 0
+
+def convergence(guess,sol,o):
+    rho=np.zeros((Nx+1,Nt+1))
+    u=np.zeros((Nx+1,Nt))
+    V=np.zeros((Nx+1,Nt+1))
+    Q=np.zeros((Nx+1,Nt))
+    solution(guess,rho,u,V,Q)
+    rho_LWR=np.zeros((Nx+1,Nt+1))
+    u_LWR=np.zeros((Nx+1,Nt))
+    V_LWR=np.zeros((Nx+1,Nt+1))
+    Q_LWR=np.zeros((Nx+1,Nt))
+    solution(sol,rho_LWR,u_LWR,V_LWR,Q_LWR)
+    error=np.linalg.norm(rho_LWR-rho,ord=o)/np.linalg.norm(rho_LWR,ord=o)+np.linalg.norm(u_LWR-u,ord=o)/np.linalg.norm(u_LWR,ord=o)
+    return error
