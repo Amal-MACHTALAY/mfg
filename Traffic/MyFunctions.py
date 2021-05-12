@@ -42,12 +42,6 @@ def f_star_p(p,r): # 0<=u<=u_max
     if costf=="NonSep":
         return max(min(u_max*(1-r/rho_jam-u_max*p),u_max),0) # MFG-NonSeparable
 
-def integral(a,b): 
-    x2 = lambda x: rho_int(x)
-    I=integrate.quad(x2, a, b)
-#     result=max(min(I[0],rho_jam),0) # 0<  <=rho_jam
-    return I[0]
-
 def rho_int(s): # initial density
     return rho_a+(rho_b-rho_a)*np.exp(-0.5*((s-0.5*L)/gama)**2) # 0<=rho<=rho_jam
 
@@ -131,6 +125,47 @@ def Fapp(w): # Ignoring the forward-backward coupling  parts
     FF[3*Nt*Nx+2*Nx-1]=w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+Nt]-VT(x[Nx])
     
     return FF
+
+def gauss_legendre(ordergl,tol):
+    """
+    Returns nodal abscissas {x} and weights {A} of
+    Gauss-Legendre m-point quadrature.
+    """
+    m = ordergl + 1
+    from math import cos,pi
+    from numpy import zeros
+
+    def legendre(t,m):
+        p0 = 1.0; p1 = t
+        for k in range(1,m):
+            p = ((2.0*k + 1.0)*t*p1 - k*p0)/(1.0 + k )
+            p0 = p1; p1 = p
+        dp = m*(p0 - t*p1)/(1.0 - t**2)
+        return p1,dp
+
+    A = zeros(m)
+    x = zeros(m)
+    nRoots = (m + 1)// 2          # Number of non-neg. roots
+    for i in range(nRoots):
+        t = cos(pi*(i + 0.75)/(m + 0.5))  # Approx. root
+        for j in range(30):
+            p,dp = legendre(t,m)          # Newton-Raphson
+            dt = -p/dp; t = t + dt        # method
+            if abs(dt) < tol:
+                x[i] = t; x[m-i-1] = -t
+                A[i] = 2.0/(1.0 - t**2)/(dp**2) # Eq.(6.25)
+                A[m-i-1] = A[i]
+                break
+    
+    return x,A
+
+def integral(a, b):
+    x, w = gauss_legendre(50,10e-14)
+    G = 0
+    for i in range(n):
+        G = G + w[i]*rho_int(0.5*(b-a)*x[i]+ 0.5*(b+a))
+    G = 0.5*(b-a)*G
+    return G
 
 
 def get_preconditioner(a):
