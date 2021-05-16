@@ -90,4 +90,9 @@ def control(u_mfg, x_mfg, t_mfg):
                 X[i,n+1]=closest(x_mfg,new_x)
     return X,v
         
-    
+ 
+def integral(a,b): 
+    x2 = lambda x: rho_int(x)
+    I=integrate.quad(x2, a, b)
+#     result=(1/dx)*max(min(I[0],rho_jam),0) # 0<  <=rho_jam
+    return I[0]
