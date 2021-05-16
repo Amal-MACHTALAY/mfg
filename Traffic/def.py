@@ -96,3 +96,12 @@ def integral(a,b):
     I=integrate.quad(x2, a, b)
 #     result=(1/dx)*max(min(I[0],rho_jam),0) # 0<  <=rho_jam
     return I[0]
+
+def Linearreg(x1,y1):
+    model = LinearRegression()
+    model.fit(x1, y1)
+    return model
+
+def predict_response(new_x, predict_model):
+    return predict_model.predict(new_x)
+
