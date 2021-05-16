@@ -19,27 +19,19 @@ def inverse_sample_function(dist, pnts, x_min=-100, x_max=100, n=1e5,
         
     return f(np.random.random(pnts))
 
-def rejection_sampling_1D( f_x, g_var, g_mean, M, num_samples ):
-    ''' does rejection sampling using a Gaussian distribution as  the
-    underlying density, given a target density function f_x and a number of
-    samples we want generated.'''
-    g_x = lambda x: 1/np.sqrt(2*np.pi*g_var)*np.exp(-(x-g_mean)**2/(2*g_var))
-    good_samples = 0;
-    # do shit until we have enough samples
-    keepers = np.zeros(num_samples)
-    while good_samples < num_samples:
-        # generate a new sample using our underlying distribution
-        new_samp = np.random.randn(1)*np.sqrt(g_var)+g_mean
-        # generate a new uniform
-        new_check = np.random.rand(1)
-        # first, let's make sure M is big enough
-        while f_x(new_samp)/g_x(new_samp)/M > 1:
-            M = 2*M
-            return rejection_sampling_1D( f_x, g_var, M, num_samples )
-        # now let's check if our stuff actually works.
-        if new_check >= f_x(new_samp)/g_x(new_samp)/M:
-            keepers[good_samples] = new_samp
-            good_samples = good_samples + 1
-        else:
-            continue
-    return good_samples
+def sample(pdf,interval,nbr_samples, n_max=10**6):
+    np.random.seed(42)
+    """ genearte a list of random samples from a given pdf
+    suggests random samples between interval[0] and interval[1] 
+    and accepts-rejects the suggestion with probability pdf(x) 
+    """
+    samples=[]
+    n=0
+    while len(samples)<nbr_samples and n<n_max:
+        x=np.random.uniform(low=interval[0],high=interval[1])
+        new_sample=pdf(x)
+        assert new_sample>=0 and new_sample<=1
+        if np.random.uniform(low=0,high=1) <=new_sample:
+            samples += [x]
+        n+=1
+    return sorted(samples)
