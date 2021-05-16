@@ -5,6 +5,15 @@ Created on Wed Apr 28 23:41:14 2021
 @author: MACHTALAY AMAL
 """
 
+def location_int(pdf, interval, x_mfg):
+    """ generate initial locations from a given initial density pdf """
+    random_loc0=sample(pdf,interval,N)
+    loc0=np.zeros(len(random_loc0))
+    for j in range(len(random_loc0)):
+        loc0[j]=closest(x_mfg,random_loc0[j])
+    return loc0
+
+
 def closest(lst, val):
     """ Find Closest number in a list """
     return lst[min(range(len(lst)), key = lambda i: abs(lst[i]-val))]
