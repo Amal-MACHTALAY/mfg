@@ -35,3 +35,11 @@ def sample(pdf,interval,nbr_samples, n_max=10**6):
             samples += [x]
         n+=1
     return sorted(samples)
+
+def find_index(lst, val):
+    ind='nan'
+    for i in range(len(lst)):
+        if lst[i]==val:
+            ind=i
+            break
+    return ind
