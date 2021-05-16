@@ -29,9 +29,9 @@ def f_star(p,r,u): # p=Vx
     if costf=="LWR":
         return -0.5*(p**2)+U(r)*p # MFG-LWR
     if costf=="Sep":
-        return u*p+f_mfg(u,r) # MFG-Separable
+        return f_star_p(p,r)*p+f_mfg(f_star_p(p,r),r) # MFG-Separable
     if costf=="NonSep":
-        return u*p+f_mfg(u,r) # MFG-NonSeparable
+        return f_star_p(p,r)*p+f_mfg(f_star_p(p,r),r) # MFG-NonSeparable
 
 def f_star_p(p,r): # 0<=u<=u_max
     if costf=="LWR":
