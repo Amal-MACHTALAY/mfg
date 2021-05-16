@@ -36,6 +36,38 @@ def sample(pdf, nbr_samples, n_max=10**6):
         n+=1
     return sorted(samples)
 
+def random_sampling(pdf,n=N,xmin=0,xmax=L):  
+      np.random.seed(apt)
+      """  
+      genearte a list of random samples from a given pdf
+      suggests random samples between 0 and L 
+      and accepts-rejects the suggestion with probability pdf(x)
+      where  
+      P : probability distribution function from which you want to generate random numbers  
+      N : desired number of random values  
+      xmin,xmax : range of random numbers desired  
+ 
+     - generate x' in the desired range  
+     - generate y' between Pmin and Pmax (Pmax is the maximal value of your pdf)  
+     - if y'<P(x') accept x', otherwise reject  
+     - repeat until desired number is achieved    
+      """   
+      x=np.linspace(xmin,xmax,1000)  
+      y=pdf(x)  
+      pmin=0. 
+      pmax=y.max()   
+      naccept=0     
+      samples=[] # output list of random numbers  
+      while naccept<n:
+        x=np.random.uniform(xmin,xmax) # x'  
+        y=np.random.uniform(pmin,pmax) # y'  
+
+        if y<pdf(x):
+            samples.append(x)  
+            naccept=naccept+1    
+            
+      return sorted(samples)
+
 def find_index(lst, val):
     """ find the index of val in lst"""
     ind='nan'
