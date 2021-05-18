@@ -14,3 +14,7 @@ file.close()
 # Read file
 f=open("data.py", "r")
 f.read()
+
+
+# Save plot in file
+plt.savefig(fig.png)
