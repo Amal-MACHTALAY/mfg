@@ -40,9 +40,9 @@ def f_mfg(u,r):
     if costf=="LWR":
         return 0.5*((U(r)-u)**2) # MFG-LWR
     if costf=="Sep":
-        return 0.5*((u/u_max)**2)-(u/u_max)+(r/rho_jam)+0.1*(r**2) # MFG-Separable
+        return 0.5*((u/u_max)**2)-(u/u_max)+(r/rho_jam) # MFG-Separable
     if costf=="NonSep":
-        return 0.5*((u/u_max)**2)-(u/u_max)+((u*r)/(u_max*rho_jam))+0.1*(r**2) # MFG-NonSeparable
+        return 0.5*((u/u_max)**2)-(u/u_max)+((u*r)/(u_max*rho_jam)) # MFG-NonSeparable
 
 def f_star_p(p,r): # 0<=u<=u_max
     if costf=="LWR":
