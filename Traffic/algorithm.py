@@ -17,16 +17,16 @@ import time
 
 
 ''' inputs '''
-T=3 # horizon length 
-N=1 # number of cars 
-u_max=1 # free flow speed
-rho_jam=1 # jam density
+T=3.0 # horizon length 
+N=1.0 # number of cars 
+u_max=1.0 # free flow speed
+rho_jam=1.0 # jam density
 L=N # road length
 CFL=0.75    # CFL<1
 rho_a=0.05; rho_b=0.95; gama=0.1
 """ Non-viscous solution""" 
-ep1=0  # rho
-ep2=0  # V
+ep1=0.0  # rho
+ep2=0.0  # V
 Error_list=[]
 Nx_list=[]
 costf="Sep"
@@ -82,11 +82,11 @@ def F(w):
         # F_u , F[Nt*Nx]->F[Nt*Nx+Nt-1] *********** 4
         FF[Nt*Nx+n]=w[(Nt+1)*Nx+n]-f_star_p(w[(2*Nt+1)*Nx+n+1]/dx,w[n])
         # F_u , F[2*Nt*Nx-Nt]->F[2*Nt*Nx-1] ********* 6
-        FF[2*Nt*Nx-Nt+n]=w[2*Nt*Nx+Nx-Nt+n]-f_star_p((w[3*Nt*Nx+2*Nx-Nt+n]-w[3*Nt*Nx+2*Nx-2*Nt+n-1])/dx,w[Nt*Nx+Nx-Nt+n-1])
+        FF[2*Nt*Nx-Nt+n]=w[(Nt+1)*Nx+(Nx-1)*Nt+n]-f_star_p((w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(Nx-1)*(Nt+1)+n])
         # F_V , F[2*Nt*Nx]->F[2*Nt*Nx+Nt-1] *********** 7
-        FF[2*Nt*Nx+n]=w[(2*Nt+1)*Nx+n+1]-w[(2*Nt+1)*Nx+n]+dt*f_star(w[(2*Nt+1)*Nx+n+1]/dx,w[n])+ep2*(w[(2*Nt+1)*Nx+Nt+n+2]-2*w[(2*Nt+1)*Nx+n+1])
+        FF[2*Nt*Nx+n]=(w[(2*Nt+1)*Nx+n+1]-w[(2*Nt+1)*Nx+n])/dt+f_star(w[(2*Nt+1)*Nx+n+1]/dx,w[n])+ep2*(w[(2*Nt+1)*Nx+Nt+n+2]-2*w[(2*Nt+1)*Nx+n+1])
         # F_V , F[3*Nt*Nx-Nt]->F[3*Nt*Nx-1] ********** 9
-        FF[3*Nt*Nx-Nt+n]=w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n]+dt*f_star((w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(Nx-1)*(Nt+1)+n])+ep2*(-2*w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])
+        FF[3*Nt*Nx-Nt+n]=(w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n])/dt+f_star((w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(Nx-1)*(Nt+1)+n])+ep2*(-2*w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])
     for j in range(2,Nx):
         for n in range(0,Nt):
             # F_rho , F[Nt]->F[Nt*Nx-Nt-1] ************ 2
@@ -94,7 +94,7 @@ def F(w):
             # F_u , F[Nt*Nx+Nt]->F[2*Nt*Nx-Nt-1] *********** 5
             FF[(j-1)*Nt+Nt*Nx+n]=w[(Nt+1)*Nx+(j-1)*Nt+n]-f_star_p((w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(j-1)*(Nt+1)+n])
             # F_V , F[2*Nt*Nx+Nt]->F[3*Nt*Nx-Nt-1] ********* 8
-            FF[(j-1)*Nt+2*Nt*Nx+n]=w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n]+dt*f_star((w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(j-1)*(Nt+1)+n])+ep2*(w[(2*Nt+1)*Nx+j*(Nt+1)+n+1]-2*w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])
+            FF[(j-1)*Nt+2*Nt*Nx+n]=(w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n])/dt+f_star((w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(j-1)*(Nt+1)+n])+ep2*(w[(2*Nt+1)*Nx+j*(Nt+1)+n+1]-2*w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])
         # F_rho_int , F[3*Nt*Nx+1]->F[3*Nt*Nx+Nx-2] ********** 11
         FF[3*Nt*Nx+j-1]=w[(j-1)*(Nt+1)]-(1/dx)*integral(x[j-1],x[j])
         # F_V_ter , F[3*Nt*Nx+Nx+1]->F[3*Nt*Nx+2*Nx-2] ********* 14
@@ -121,11 +121,11 @@ def Fapp(w): # Ignoring the forward-backward coupling  parts
         # F_u , F[Nt*Nx]->F[Nt*Nx+Nt-1] *********** 4
         FF[Nt*Nx+n]=w[(Nt+1)*Nx+n]
         # F_u , F[2*Nt*Nx-Nt]->F[2*Nt*Nx-1] ********* 6
-        FF[2*Nt*Nx-Nt+n]=w[2*Nt*Nx+Nx-Nt+n]
+        FF[2*Nt*Nx-Nt+n]=w[(Nt+1)*Nx+(Nx-1)*Nt+n]
         # F_V , F[2*Nt*Nx]->F[2*Nt*Nx+Nt-1] *********** 7
-        FF[2*Nt*Nx+n]=w[(2*Nt+1)*Nx+n+1]-w[(2*Nt+1)*Nx+n]+ep2*(w[(2*Nt+1)*Nx+Nt+n+2]-2*w[(2*Nt+1)*Nx+n+1])
+        FF[2*Nt*Nx+n]=(w[(2*Nt+1)*Nx+n+1]-w[(2*Nt+1)*Nx+n])/dt+ep2*(w[(2*Nt+1)*Nx+Nt+n+2]-2*w[(2*Nt+1)*Nx+n+1])
         # F_V , F[3*Nt*Nx-Nt]->F[3*Nt*Nx-1] ********** 9
-        FF[3*Nt*Nx-Nt+n]=w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n]+ep2*(-2*w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])
+        FF[3*Nt*Nx-Nt+n]=(w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n])/dt+ep2*(-2*w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])
     for j in range(2,Nx):
         for n in range(0,Nt):
             # F_rho , F[Nt]->F[Nt*Nx-Nt-1] ************ 2
@@ -133,7 +133,7 @@ def Fapp(w): # Ignoring the forward-backward coupling  parts
             # F_u , F[Nt*Nx+Nt]->F[2*Nt*Nx-Nt-1] *********** 5
             FF[(j-1)*Nt+Nt*Nx+n]=w[(Nt+1)*Nx+(j-1)*Nt+n]
             # F_V , F[2*Nt*Nx+Nt]->F[3*Nt*Nx-Nt-1] ********* 8
-            FF[(j-1)*Nt+2*Nt*Nx+n]=w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n]+ep2*(w[(2*Nt+1)*Nx+j*(Nt+1)+n+1]-2*w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])
+            FF[(j-1)*Nt+2*Nt*Nx+n]=(w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n])/dt+ep2*(w[(2*Nt+1)*Nx+j*(Nt+1)+n+1]-2*w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])
         # F_rho_int , F[3*Nt*Nx+1]->F[3*Nt*Nx+Nx-2] ********** 11
         FF[3*Nt*Nx+j-1]=w[(j-1)*(Nt+1)]-(1/dx)*integral(x[j-1],x[j])
         # F_V_ter , F[3*Nt*Nx+Nx+1]->F[3*Nt*Nx+2*Nx-2] ********* 14
@@ -148,6 +148,7 @@ def Fapp(w): # Ignoring the forward-backward coupling  parts
     FF[3*Nt*Nx+2*Nx-1]=w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+Nt]-VT(x[Nx])
     
     return FF
+
 
 
 def get_preconditioner(a):
@@ -188,7 +189,7 @@ def solution(sol,rho,u,V,Q):
         rho[0,n]=rho[Nx,n]
         V[0,n]=V[Nx,n]
     for n in range(0,Nt):
-        u[0,n]=f_star_p(V[1,n]/dx,rho[0,n])
+        u[0,n]=f_star_p(V[0,n+1]/dx,rho[0,n])
         Q[0,n]=rho[0,n]*u[0,n]
 #     print("rho=",rho)
 #     print("u=",u)
