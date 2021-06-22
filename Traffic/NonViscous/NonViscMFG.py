@@ -118,7 +118,7 @@ def F(w):
 
 
 def get_preconditioner(a):
-    beta=0
+    beta=0  # Ignoring the forward-backward coupling  parts
     Jac=nd.Jacobian(F)
     J1=Jac(a)
     # the *incomplete LU* decomposition
