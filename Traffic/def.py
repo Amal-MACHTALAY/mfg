@@ -105,3 +105,26 @@ def Linearreg(x1,y1):
 def predict_response(new_x, predict_model):
     return predict_model.predict(new_x)
 
+def kde(x,x_data):  # Kernel density estimation
+    def gauss(x):
+        return (1/math.sqrt(2*math.pi))*math.exp(-0.5*(x**2))
+    res=0
+    bandwidth=1.06*np.std(x_data)*(len(x_data)**(-1/5))  # the optimal choice (std : standard deviation)
+    for i in range(len(x_data)):
+        res += gauss((x-x_data[i])/bandwidth)
+    res /= (N*bandwidth)
+    return res
+
+input_array=np.random.randn(20000).tolist()
+# print(input_array)
+x_array=np.linspace(min(input_array),max(input_array),50)
+print(x_array)
+y_array=[get_kde(x_array[i],input_array) for i in range(x_array.shape[0])]
+
+import matplotlib.pyplot as plt
+plt.figure(1)
+plt.scatter(x_array,y_array,s=10)
+# plt.hist(input_array,bins=40,density=True)
+plt.plot(x_array.tolist(),y_array,color='red',linestyle='-')
+plt.show()
+
