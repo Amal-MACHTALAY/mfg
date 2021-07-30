@@ -22,15 +22,15 @@ import time
 ''' inputs '''
 ''' population 1 : cars
     population 2 : trucks '''
-T=5.0 # horizon length 
+T=10.0 # horizon length 
 # number of vehicles : 2N
 N=5
 # average length of the vehicles in the j-th population
 l1=1; l2=3; l=l1+l2
 # free flow speed
-u1_max=1.0; u2_max=0.6
+u1_max=1.0; u2_max=0.8
 # jam density
-rho1_jam=1.0; rho2_jam=0.6 
+rho1_jam=1.0; rho2_jam=0.8 
 L=2*N # road length
 CFL=0.75    # CFL<1
 rho_a=0.2; rho_b=0.8
@@ -79,28 +79,28 @@ def VT(a): # Terminal cost
     return 0.0
 
 ''' Integrated initial density'''
-def rho2_int(s): # initial density
-    if 0<=s<=(1/5)*L or (2/5)*L<=s<=(3/5)*L or (4/5)*L<=s<=L:
-        return rho_a
-    else: 
-        return rho_b
-def rho1_int(s): # initial density
-    if 0<=s<=(1/5)*L or (2/5)*L<=s<=(3/5)*L or (4/5)*L<=s<=L:
-        return rho_b
-    else: 
-        return rho_a
+# def rho2_int(s): # initial density
+#     if 0<=s<=(1/5)*L or (2/5)*L<=s<=(3/5)*L or (4/5)*L<=s<=L:
+#         return rho_a
+#     else: 
+#         return rho_b
+# def rho1_int(s): # initial density
+#     if 0<=s<=(1/5)*L or (2/5)*L<=s<=(3/5)*L or (4/5)*L<=s<=L:
+#         return rho_b
+#     else: 
+#         return rho_a
 
 ''' Fully segregated initial density'''
-# def rho1_int(s): # initial density
-#     if 0<=s<=(1/2)*L :
-#         return rho_a
-#     else: 
-#         return rho_a+(rho_b-rho_a)*(s-0.5*L)*np.exp(-0.2*((s-L/2)**2))
-# def rho2_int(s): # initial density
-#     if 0<=s<=(1/2)*L :
-#         return rho_a+(rho_b-rho_a)*(0.5*L-s)*np.exp(-0.2*((s-L/2)**2))
-#     else: 
-#         return rho_a
+def rho1_int(s): # initial density
+    if 0<=s<=(1/2)*L :
+        return rho_a
+    else: 
+        return rho_a+(rho_b-rho_a)*(s-0.5*L)*np.exp(-0.2*((s-L/2)**2))
+def rho2_int(s): # initial density
+    if 0<=s<=(1/2)*L :
+        return rho_a+(rho_b-rho_a)*(0.5*L-s)*np.exp(-0.2*((s-L/2)**2))
+    else: 
+        return rho_a
 
 def VT(a): # Terminal cost
     return 0.0
@@ -118,17 +118,17 @@ def F(w):
         # F_rho2 , F[2*Nt*Nx-Nt]->F[2*Nt*Nx-1] ********** 6 (2)
         FF[Nt*(2*Nx-1)+n]=w[(Nt+1)*(2*Nx-1)+n+1]-0.5*w[(Nt+1)*(2*Nx-2)+n]-(0.5*dt/dx)*w[(Nt+1)*(2*Nx-2)+n]*w[(Nt+1)*2*Nx+(2*Nx-2)*Nt+n]+ep1*(-2*w[(Nt+1)*(2*Nx-1)+n]+w[(Nt+1)*(2*Nx-2)+n])
         # F_u1 , F[2*Nt*Nx]->F[2*Nt*Nx+Nt-1] *********** 7 (1)
-        FF[Nt*2*Nx+n]=w[(Nt+1)*2*Nx+n]-beta*f_star_p(u1_max,w[(2*Nt+1)*2*Nx+n+1]/dx,w[Nx*(Nt+1)+n],w[n])
+        FF[Nt*2*Nx+n]=w[(Nt+1)*2*Nx+n]-beta*f_star_p(u1_max,w[(2*Nt+1)*2*Nx+n+1]/dx,w[n],w[Nx*(Nt+1)+n])
         # F_u1 , F[3*Nt*Nx-Nt]->F[3*Nt*Nx-1] ********* 9 (1)
-        FF[(Nx-1)*Nt+Nt*2*Nx+n]=w[(Nt+1)*2*Nx+(Nx-1)*Nt+n]-beta*f_star_p(u1_max,(w[(2*Nt+1)*2*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(2*Nx-1)*(Nt+1)+n],w[(Nx-1)*(Nt+1)+n])
+        FF[(Nx-1)*Nt+Nt*2*Nx+n]=w[(Nt+1)*2*Nx+(Nx-1)*Nt+n]-beta*f_star_p(u1_max,(w[(2*Nt+1)*2*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(Nx-1)*(Nt+1)+n],w[(2*Nx-1)*(Nt+1)+n])
         # F_u2 , F[3*Nt*Nx]->F[3*Nt*Nx+Nt-1] *********** 10 (2)
         FF[Nt*Nx+Nt*2*Nx+n]=w[(Nt+1)*2*Nx+Nt*Nx+n]-beta*f_star_p(u2_max,w[(2*Nt+1)*2*Nx+Nx*(Nt+1)+n+1]/dx,w[n],w[Nx*(Nt+1)+n])
         # F_u2 , F[4*Nt*Nx-Nt]->F[4*Nt*Nx-1] ********* 12 (2)
         FF[(2*Nx-1)*Nt+Nt*2*Nx+n]=w[(Nt+1)*2*Nx+(2*Nx-1)*Nt+n]-beta*f_star_p(u2_max,(w[(2*Nt+1)*2*Nx+(2*Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(2*Nx-2)*(Nt+1)+n+1])/dx,w[(Nx-1)*(Nt+1)+n],w[(2*Nx-1)*(Nt+1)+n])
         # F_V1 , F[4*Nt*Nx]->F[4*Nt*Nx+Nt-1] *********** 13 (1)
-        FF[2*Nt*2*Nx+n]=w[(2*Nt+1)*2*Nx+n+1]-w[(2*Nt+1)*2*Nx+n]+beta*dt*f_star(u1_max,w[(2*Nt+1)*2*Nx+n+1]/dx,w[Nx*(Nt+1)+n],w[n])+ep2*(w[(2*Nt+1)*2*Nx+Nt+n+2]-2*w[(2*Nt+1)*2*Nx+n+1])
+        FF[2*Nt*2*Nx+n]=w[(2*Nt+1)*2*Nx+n+1]-w[(2*Nt+1)*2*Nx+n]+beta*dt*f_star(u1_max,w[(2*Nt+1)*2*Nx+n+1]/dx,w[n],w[Nx*(Nt+1)+n])+ep2*(w[(2*Nt+1)*2*Nx+Nt+n+2]-2*w[(2*Nt+1)*2*Nx+n+1])
         # F_V1 , F[5*Nt*Nx-Nt]->F[5*Nt*Nx-1] ********** 15 (1)
-        FF[5*Nt*Nx-Nt+n]=w[(2*Nt+1)*2*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(Nx-1)*(Nt+1)+n]+beta*dt*f_star(u1_max,(w[(2*Nt+1)*2*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(2*Nx-1)*(Nt+1)+n],w[(Nx-1)*(Nt+1)+n])+ep2*(-2*w[(2*Nt+1)*2*Nx+(Nx-1)*(Nt+1)+n+1]+w[(2*Nt+1)*2*Nx+(Nx-2)*(Nt+1)+n+1])
+        FF[5*Nt*Nx-Nt+n]=w[(2*Nt+1)*2*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(Nx-1)*(Nt+1)+n]+beta*dt*f_star(u1_max,(w[(2*Nt+1)*2*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(Nx-1)*(Nt+1)+n],w[(2*Nx-1)*(Nt+1)+n])+ep2*(-2*w[(2*Nt+1)*2*Nx+(Nx-1)*(Nt+1)+n+1]+w[(2*Nt+1)*2*Nx+(Nx-2)*(Nt+1)+n+1])
         # F_V2 , F[5*Nt*Nx]->F[5*Nt*Nx+Nt-1] *********** 16 (2)
         FF[Nt*Nx+2*Nt*2*Nx+n]=w[(2*Nt+1)*2*Nx+Nx*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+Nx*(Nt+1)+n]+beta*dt*f_star(u2_max,w[(2*Nt+1)*2*Nx+Nx*(Nt+1)+n+1]/dx,w[n],w[Nx*(Nt+1)+n])+ep2*(w[(2*Nt+1)*2*Nx+(Nx+1)*(Nt+1)+n+1]-2*w[(2*Nt+1)*2*Nx+Nx*(Nt+1)+n+1])
         # F_V2 , F[6*Nt*Nx-Nt]->F[6*Nt*Nx-1] ********** 18 (2)
@@ -140,9 +140,9 @@ def F(w):
             # F_rho1 , F[Nt]->F[Nt*Nx-Nt-1] ************ 2 (1)
             FF[(j-1)*Nt+n]=w[(j-1)*(Nt+1)+n+1]-0.5*(w[(j-2)*(Nt+1)+n]+w[j*(Nt+1)+n])+(0.5*dt/dx)*(w[j*(Nt+1)+n]*w[(Nt+1)*2*Nx+j*Nt+n]-w[(j-2)*(Nt+1)+n]*w[(Nt+1)*2*Nx+(j-2)*Nt+n])+ep1*(w[j*(Nt+1)+n]-2*w[(j-1)*(Nt+1)+n]+w[(j-2)*(Nt+1)+n])      
             # F_u1 , F[2*Nt*Nx+Nt]->F[3*Nt*Nx-Nt-1] *********** 8 (1)
-            FF[(j-1)*Nt+Nt*2*Nx+n]=w[(Nt+1)*2*Nx+(j-1)*Nt+n]-beta*f_star_p(u1_max,(w[(2*Nt+1)*2*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(Nx+j-1)*(Nt+1)+n],w[(j-1)*(Nt+1)+n])
+            FF[(j-1)*Nt+Nt*2*Nx+n]=w[(Nt+1)*2*Nx+(j-1)*Nt+n]-beta*f_star_p(u1_max,(w[(2*Nt+1)*2*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(j-1)*(Nt+1)+n],w[(Nx+j-1)*(Nt+1)+n])
             # F_V1 , F[4*Nt*Nx+Nt]->F[5*Nt*Nx-Nt-1] ********* 14 (1)
-            FF[(j-1)*Nt+2*Nt*2*Nx+n]=w[(2*Nt+1)*2*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(j-1)*(Nt+1)+n]+beta*dt*f_star(u1_max,(w[(2*Nt+1)*2*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(Nx+j-1)*(Nt+1)+n],w[(j-1)*(Nt+1)+n])+ep2*(w[(2*Nt+1)*2*Nx+j*(Nt+1)+n+1]-2*w[(2*Nt+1)*2*Nx+(j-1)*(Nt+1)+n+1]+w[(2*Nt+1)*2*Nx+(j-2)*(Nt+1)+n+1])
+            FF[(j-1)*Nt+2*Nt*2*Nx+n]=w[(2*Nt+1)*2*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(j-1)*(Nt+1)+n]+beta*dt*f_star(u1_max,(w[(2*Nt+1)*2*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*2*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(j-1)*(Nt+1)+n],w[(Nx+j-1)*(Nt+1)+n])+ep2*(w[(2*Nt+1)*2*Nx+j*(Nt+1)+n+1]-2*w[(2*Nt+1)*2*Nx+(j-1)*(Nt+1)+n+1]+w[(2*Nt+1)*2*Nx+(j-2)*(Nt+1)+n+1])
         # F_rho1_int , F[6*Nt*Nx+1]->F[6*Nt*Nx+Nx-2] ********** 20 (1)
         FF[6*Nt*Nx+j-1]=w[(j-1)*(Nt+1)]-(1/dx)*integral(1,x[j-1],x[j])
         # F_V1_ter , F[6*Nt*Nx+2*Nx+1]->F[6*Nt*Nx+3*Nx-2] ********* 26 (1)
@@ -361,5 +361,81 @@ plt.legend()
 plt.savefig('2LWR_integ_T15_N5_4.png')
 
 
+""" Using KDE """
+apt=58  # change apt to update random samples
+def sample(pdf, nbr_samples, interval, n_max=10**6):
+    np.random.seed(apt)
+    """ genearte a list of random samples from a given pdf
+    suggests random samples between interval[0] and interval[1] 
+    and accepts-rejects the suggestion with probability pdf(x) 
+    """
+    samples=[]
+    n=0
+    while len(samples)<nbr_samples and n<n_max:
+        x=np.random.uniform(low=interval[0],high=interval[1])
+        new_sample=pdf(x)
+        assert new_sample>=0 and new_sample<=1
+        if np.random.uniform(low=0,high=1) <=new_sample:
+            samples += [x]
+        n+=1
+    return sorted(samples)
 
+def kde(x,x_data):  # Kernel density estimation
+    def gauss(x):
+        return (1/math.sqrt(2*math.pi))*math.exp(-0.5*(x**2))
+    res=0
+    bandwidth=1.06*np.std(x_data)*(len(x_data)**(-1/5))  # the optimal choice (std : standard deviation)
+    for i in range(len(x_data)):
+        res += gauss((x-x_data[i])/bandwidth)
+    res /= (N*bandwidth)
+    return res
 
+pos0_1=sample(rho1_int,10,[N,2*N])
+print(pos0_1)
+ro0_1=[kde(pos0_1[i],pos0_1) for i in range(len(pos0_1))]
+# print(ro0_1)
+pos0_2=sample(rho2_int,10,[0,N])
+print(pos0_2)
+ro0_2=[kde(pos0_2[i],pos0_2) for i in range(len(pos0_2))]
+# print(ro0_2)
+Y1=[min(min(ro0_1),min(ro0_2))]*(10)
+Y2=[min(min(ro0_1),min(ro0_2))]*(10)
+plt.plot(pos0_1,ro0_1,label='cars')
+plt.plot(pos0_2,ro0_2,label='trucks')
+plt.scatter(pos0_1,Y1,s=10,color='blue')
+plt.scatter(pos0_2,Y2,s=10,color='red')
+plt.legend()
+plt.grid()
+plt.title("Initial distribution")
+plt.xlabel('x')
+
+""" solve in coarse grid """
+Nx=88; Nt=5 # spatial-temporal grid sizes
+print(3*Nt*2*Nx+2*2*Nx)
+dx=L/Nx # spatial step size
+dt=min(T/Nt,CFL*dx/abs(u1_max)) # temporal step size
+# dt=min(T/Nt,CFL*dx/abs(u1_max),CFL*(dx**2)/(2*mu)) # temporal step size
+# ep1=-mu*dt/(dx**2)  # rho
+# ep2=mu*dt/(dx**2) # V
+print('dx={dx}, dt={dt}'.format(dx=round(dx,3),dt=round(dt,3)))
+x=np.linspace(0,L,Nx+1)
+# print(x)
+x1=[]
+x2=[]
+for i in range(len(x)):
+    if x[i]<=N:
+        x2.append(x[i])
+    else : x1.append(x[i])
+# print(x1)
+# print(x2)
+t=np.linspace(0,T,Nt+1)
+
+def integral(k,a,b):
+    if k==1 : 
+        y2 = lambda y: kde(y,x1)
+        I=integrate.quad(y2, a, b)
+    elif k==2 :
+        y2 = lambda y: kde(y,x2)
+        I=integrate.quad(y2, a, b)
+#     I=integrate.quad(x2, a, b)
+    return I[0]
