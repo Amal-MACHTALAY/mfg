@@ -1,0 +1,11 @@
+(base) amal@amal-HP-ZBook-15-G2:~$ cat /proc/sys/vm/overcommit_memory
+0
+(base) amal@amal-HP-ZBook-15-G2:~$ echo 1 > /proc/sys/vm/overcommit_memory
+bash: /proc/sys/vm/overcommit_memory: Permission denied
+(base) amal@amal-HP-ZBook-15-G2:~$ echo 1 | sudo tee /proc/sys/vm/overcommit_memory
+[sudo] password for amal: 
+1
+(base) amal@amal-HP-ZBook-15-G2:~$ cat /proc/sys/vm/overcommit_memory
+1
+(base) amal@amal-HP-ZBook-15-G2:~$ 
+
