@@ -1,20 +1,18 @@
-#!/usr/bin/env python3
+##!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun May 30 23:45:00 2021
+Created on Tue Oct 19 15:43:29 2021
 
 @author: amal
 """
 
+
 import numpy as np
 from scipy import integrate
-import numdifftools as nd
 from scipy.optimize.nonlin import newton_krylov
 import scipy.sparse.linalg as spla
 from scipy.interpolate import griddata
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib import cm
+from scipy.sparse import csc_matrix
 import time
 
 ''' inputs '''
@@ -26,17 +24,15 @@ L=N # road length
 CFL=0.75    # CFL<1
 rho_a=0.05; rho_b=0.95; gama=0.1
 # rho_a=0.2; rho_b=0.8; gama=0.15*L
-beta=1
 # """ Non-viscous solution"""
-ep1=0.0  # rho
-# ep2=0.0  # V
-""" Viscous solution"""
-EPS=0.45
-mu=0.05 # viscosity coefficient 
+eps=0.0  # V
+# """ Viscous solution"""
+# EPS=0.45
+# mu=0.025 # viscosity coefficient 
 
-Error_list=[]
 Nx_list=[]
-costf="NonSep"
+Nt_list=[]
+costf="LWR"
 
 ''' functions '''
 def U(rho): # Greenshields desired speed
@@ -77,30 +73,31 @@ def rho_int(s): # initial density
 def VT(a): # Terminal cost
     return 0.0
 
+
 def F(w):
     # FF=[F_rho,F_u,F_V,F_rho_int,F_V_ter], F_rho:0->Nt*Nx-1, F_u:Nt*Nx->2*Nt*Nx-1, F_V:2*Nt*Nx->3*Nt*Nx-1, F_rho_int:3*Nt*Nx->3*Nt*Nx+Nx-1, F_V_ter:3*Nt*Nx+Nx->3*Nt*Nx+2*Nx-1
     FF=np.zeros(3*Nt*Nx+2*Nx)
     for n in range(0,Nt):
-        # F_rho , F[0]->F[Nt-1] ************** 1
-        FF[n]=w[n+1]-0.5*w[n+Nt+1]+(0.5*dt/dx)*w[n+Nt+1]*w[n+(Nt+1)*Nx+Nt]+ep1*(w[n+Nt+1]-2*w[n])
-        # F_rho , F[Nt*Nx-Nt]->F[Nt*Nx-1] ********** 3
-        FF[Nt*(Nx-1)+n]=w[(Nt+1)*(Nx-1)+n+1]-0.5*w[(Nt+1)*(Nx-2)+n]-(0.5*dt/dx)*w[(Nt+1)*(Nx-2)+n]*w[(Nt+1)*Nx+(Nx-2)*Nt+n]+ep1*(-2*w[(Nt+1)*(Nx-1)+n]+w[(Nt+1)*(Nx-2)+n])
-        # F_u , F[Nt*Nx]->F[Nt*Nx+Nt-1] *********** 4
-        FF[Nt*Nx+n]=w[(Nt+1)*Nx+n]-beta*f_star_p(w[(2*Nt+1)*Nx+n+1]/dx,w[n])
-        # F_u , F[2*Nt*Nx-Nt]->F[2*Nt*Nx-1] ********* 6
-        FF[2*Nt*Nx-Nt+n]=w[(Nt+1)*Nx+(Nx-1)*Nt+n]-beta*f_star_p((w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(Nx-1)*(Nt+1)+n])
-        # F_V , F[2*Nt*Nx]->F[2*Nt*Nx+Nt-1] *********** 7
-        FF[2*Nt*Nx+n]=w[(2*Nt+1)*Nx+n+1]-w[(2*Nt+1)*Nx+n]+beta*dt*f_star(w[(2*Nt+1)*Nx+n+1]/dx,w[n])+ep2*(w[(2*Nt+1)*Nx+Nt+n+2]-2*w[(2*Nt+1)*Nx+n+1])
-        # F_V , F[3*Nt*Nx-Nt]->F[3*Nt*Nx-1] ********** 9
-        FF[3*Nt*Nx-Nt+n]=w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n]+beta*dt*f_star((w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(Nx-1)*(Nt+1)+n])+ep2*(-2*w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])
+        # F_rho , F[0]->F[Nt-1] ************** 1  
+        FF[n]=w[n+1]-0.5*(w[(Nx-1)*(Nt+1)+n]+w[n+Nt+1])+(0.5*dt/dx)*(w[n+Nt+1]*w[n+(Nt+1)*Nx+Nt]-w[(Nx-1)*(Nt+1)+n]*w[(Nt+1)*Nx+(Nx-1)*Nt+n])
+        # F_rho , F[Nt*Nx-Nt]->F[Nt*Nx-1] ********** 3 
+        FF[Nt*(Nx-1)+n]=w[(Nt+1)*(Nx-1)+n+1]-0.5*(w[(Nt+1)*(Nx-2)+n]+w[n])+(0.5*dt/dx)*(w[n]*w[(Nt+1)*Nx+n]-w[(Nt+1)*(Nx-2)+n]*w[(Nt+1)*Nx+(Nx-2)*Nt+n])
+        # F_u , F[Nt*Nx]->F[Nt*Nx+Nt-1] *********** 4 
+        FF[Nt*Nx+n]=w[(Nt+1)*Nx+n]-f_star_p((w[(2*Nt+1)*Nx+n+1]-w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1])/dx,w[n])
+        # F_u , F[2*Nt*Nx-Nt]->F[2*Nt*Nx-1] ********* 6 
+        FF[2*Nt*Nx-Nt+n]=w[(Nt+1)*Nx+(Nx-1)*Nt+n]-f_star_p((w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(Nx-1)*(Nt+1)+n])
+        # F_V , F[2*Nt*Nx]->F[2*Nt*Nx+Nt-1] *********** 7 
+        FF[2*Nt*Nx+n]=w[(2*Nt+1)*Nx+n+1]-w[(2*Nt+1)*Nx+n]+dt*f_star((w[(2*Nt+1)*Nx+n+1]-w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1])/dx,w[n])+eps*(w[(2*Nt+1)*Nx+(Nt+1)+n+1]-2*w[(2*Nt+1)*Nx+n+1]+w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1])
+        # F_V , F[3*Nt*Nx-Nt]->F[3*Nt*Nx-1] ********** 9 
+        FF[3*Nt*Nx-Nt+n]=w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n]+dt*f_star((w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])/dx,w[(Nx-1)*(Nt+1)+n])+eps*(w[(2*Nt+1)*Nx+n+1]-2*w[(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1])
     for j in range(2,Nx):
         for n in range(0,Nt):
-            # F_rho , F[Nt]->F[Nt*Nx-Nt-1] ************ 2
-            FF[(j-1)*Nt+n]=w[(j-1)*(Nt+1)+n+1]-0.5*(w[(j-2)*(Nt+1)+n]+w[j*(Nt+1)+n])+(0.5*dt/dx)*(w[j*(Nt+1)+n]*w[(Nt+1)*Nx+j*Nt+n]-w[(j-2)*(Nt+1)+n]*w[(Nt+1)*Nx+(j-2)*Nt+n])+ep1*(w[j*(Nt+1)+n]-2*w[(j-1)*(Nt+1)+n]+w[(j-2)*(Nt+1)+n])
-            # F_u , F[Nt*Nx+Nt]->F[2*Nt*Nx-Nt-1] *********** 5
-            FF[(j-1)*Nt+Nt*Nx+n]=w[(Nt+1)*Nx+(j-1)*Nt+n]-beta*f_star_p((w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(j-1)*(Nt+1)+n])
-            # F_V , F[2*Nt*Nx+Nt]->F[3*Nt*Nx-Nt-1] ********* 8
-            FF[(j-1)*Nt+2*Nt*Nx+n]=w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n]+beta*dt*f_star((w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(j-1)*(Nt+1)+n])+ep2*(w[(2*Nt+1)*Nx+j*(Nt+1)+n+1]-2*w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])
+            # F_rho , F[Nt]->F[Nt*Nx-Nt-1] ************ 2 
+            FF[(j-1)*Nt+n]=w[(j-1)*(Nt+1)+n+1]-0.5*(w[(j-2)*(Nt+1)+n]+w[j*(Nt+1)+n])+(0.5*dt/dx)*(w[j*(Nt+1)+n]*w[(Nt+1)*Nx+j*Nt+n]-w[(j-2)*(Nt+1)+n]*w[(Nt+1)*Nx+(j-2)*Nt+n])
+            # F_u , F[Nt*Nx+Nt]->F[2*Nt*Nx-Nt-1] *********** 5 
+            FF[(j-1)*Nt+Nt*Nx+n]=w[(Nt+1)*Nx+(j-1)*Nt+n]-f_star_p((w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(j-1)*(Nt+1)+n])
+            # F_V , F[2*Nt*Nx+Nt]->F[3*Nt*Nx-Nt-1] ********* 8 
+            FF[(j-1)*Nt+2*Nt*Nx+n]=w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n]+dt*f_star((w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]-w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])/dx,w[(j-1)*(Nt+1)+n])+eps*(w[(2*Nt+1)*Nx+j*(Nt+1)+n+1]-2*w[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]+w[(2*Nt+1)*Nx+(j-2)*(Nt+1)+n+1])
         # F_rho_int , F[3*Nt*Nx+1]->F[3*Nt*Nx+Nx-2] ********** 11
         FF[3*Nt*Nx+j-1]=w[(j-1)*(Nt+1)]-(1/dx)*integral(x[j-1],x[j])
         # F_V_ter , F[3*Nt*Nx+Nx+1]->F[3*Nt*Nx+2*Nx-2] ********* 14
@@ -117,207 +114,246 @@ def F(w):
     return FF
 
 
+
+def jacobian(w): # Ignoring the forward-backward coupling  parts
+    J=np.zeros((3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx))
+    for n in range(0,Nt):
+        for j in range(1,Nx-1):
+            J[j*Nt+n,j*(Nt+1)+n+1]=1 # F_rho - rho
+            J[j*Nt+n,j*(Nt+1)+n+Nt+1]=(0.5*dt/dx)*w[(Nt+1)*Nx+(j+1)*Nt+n]-0.5 # F_rho -rho
+            J[j*Nt+n,j*(Nt+1)+n-Nt-1]=-(0.5*dt/dx)*w[(Nt+1)*Nx+(j-1)*Nt+n]-0.5 # F_rho -rho
+            J[j*Nt+n,(Nt+1)*Nx+j*Nt+n+Nt]=(0.5*dt/dx)*w[(j+1)*(Nt+1)+n] # F_rho - u
+            J[j*Nt+n,(Nt+1)*Nx+j*Nt+n-Nt]=-(0.5*dt/dx)*w[(j-1)*(Nt+1)+n] # F_rho - u
+            J[Nt*Nx+j*Nt+n,(Nt+1)*Nx+j*Nt+n]=1 # F_u - u
+            J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n]=-1 # F_V - V
+            # J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n+1]=1 # F_V - V
+            J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n+1]=1-2*eps # F_V - V ....
+            J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n+Nt+2]=eps # F_V - V ....
+            J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]=eps # F_V - V ....
+            
+        J[n,n+1]=1 # F_rho - rho
+        J[(Nx-1)*Nt+n,(Nx-1)*(Nt+1)+n+1]=1 # F_rho - rho
+        J[n,n+Nt+1]=(0.5*dt/dx)*w[(Nt+1)*Nx+n]-0.5 # F_rho - rho
+        J[(Nx-1)*Nt+n,(Nx-1)*(Nt+1)+n-Nt-1]=-(0.5*dt/dx)*w[(Nt+1)*Nx+((Nx-1)-1)*Nt+n]-0.5 # F_rho - rho
+        J[n,Nx*Nt+Nx-Nt+n-1]=(0.5*dt/dx)*w[(Nt+1)*Nx+(Nx-1)*Nt+n]-0.5 # F_rho - rho
+        J[Nx*Nt-Nt+n,n]=(0.5*dt/dx)*w[(Nt+1)*Nx+n]-0.5 # F_rho - rho
+        J[n,(Nt+1)*Nx+n+Nt]=(0.5*dt/dx)*w[n] # F_rho - u
+        J[(Nx-1)*Nt+n,(Nt+1)*Nx+(Nx-1)*Nt+n-Nt]=-(0.5*dt/dx)*w[((Nx-1)-1)*(Nt+1)+n] # F_rho - u
+        J[n,2*Nt*Nx+Nx-Nt+n]=-(0.5*dt/dx)*w[(Nx-1)*(Nt+1)+n] # F_rho - u
+        J[Nt*Nx+Nx+n,n]=(0.5*dt/dx)*w[n] # F_rho - u
+        J[Nt*Nx+n,(Nt+1)*Nx+n]=1 # F_u -u
+        J[Nt*Nx+(Nx-1)*Nt+n,(Nt+1)*Nx+(Nx-1)*Nt+n]=1 # F_u - u
+        J[2*Nt*Nx+n,(2*Nt+1)*Nx+n]=-1 # F_V - V
+        # J[2*Nt*Nx+n,(2*Nt+1)*Nx+n+1]=1 # F_V - V ....
+        J[2*Nt*Nx+n,(2*Nt+1)*Nx+n+1]=1-2*eps  # F_V - V
+        J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n]=-1 # F_V - V
+        # J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]=1 # F_V - V 
+        J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]=1-2*eps # F_V - V ....
+        J[2*Nt*Nx+n,(2*Nt+1)*Nx+n+Nt+2]=eps # F_V - V ....
+        J[2*Nt*Nx+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]=eps # F_V - V ....
+        J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1]=eps # F_V - V ....
+        J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+n+1]=eps # F_V - V ....
+    for j in range(0,Nx):
+        J[3*Nt*Nx+j,(Nt+1)*j]=1 # F_rho_int - rho
+        J[3*Nt*Nx+Nx+j,(2*Nt+1)*Nx+(Nt+1)*j+Nt]=1 # F_V_ter - V
+    
+    return J
+
+# import pandas as pd
 def get_preconditioner(a):
-    beta=0  # Ignoring the forward-backward coupling  parts
-    Jac=nd.Jacobian(F)
-    J1=Jac(a)
+    Jac=jacobian(a)
+    Jac1 = csc_matrix(Jac)
+    # df = pd.DataFrame(data=Jac.astype(float))
+    # df.to_csv('/home/amal/Documents/Newton-gmres-solver/prec.csv', sep=' ', header=False, float_format='%.2f', index=False)
     # the *incomplete LU* decomposition
-    J1_ilu = spla.spilu(J1)
-    # matrix-vector product -> LinearOperator 
-    M_x = lambda r: J1_ilu.solve(r)
-    M = spla.LinearOperator(J1.shape, M_x)
+    J_ilu = spla.spilu(Jac1)
+    M_x = lambda r: J_ilu.solve(r)
+    M = spla.LinearOperator(Jac.shape, M_x)
 
     return M
     
 
-def interpol(Nt,Nt_mul,Nx,Nx_mul,w): # 1D interpolation
-    
-    """" Go from a coarse grid Nt*Nx to a finer grid spacing (Nt_mul*Nt)*(Nx_mul*Nx) """""
+def sol_to(n_Nt,sol,rho,u,V):
+    for j in range(0,Nx):
+        for n in range(0,n_Nt):
+            rho[j,n]=sol[j*(n_Nt+1)+n]
+            u[j,n]=sol[(n_Nt+1)*Nx+j*n_Nt+n]
+            V[j,n]=sol[(2*n_Nt+1)*Nx+j*(n_Nt+1)+n]
+        rho[j,n_Nt]=sol[j*(n_Nt+1)+n_Nt]
+        V[j,n_Nt]=sol[(2*n_Nt+1)*Nx+j*(n_Nt+1)+n_Nt]
+    return 0
 
-    n=w.shape[0] # n=3Nt*Nx+2Nx
-    i = np.indices(w.shape)[0]/(n-1)  # [0, ..., 1]
-    new_n = 3*(Nt_mul*Nt)*(Nx_mul*Nx)+2*(Nx_mul*Nx)
-    print('n={n}, new_n={new_n}'.format(n=n,new_n=new_n))
+def to_sol(n_Nt,sol,rho,u,V):
+    for j in range(0,2*Nx):
+        for n in range(0,2*n_Nt):
+            sol[j*(2*n_Nt+1)+n]=rho[j,n]
+            sol[(2*n_Nt+1)*2*Nx+j*2*n_Nt+n]=u[j,n]
+            sol[(2*2*n_Nt+1)*2*Nx+j*(2*n_Nt+1)+n]=V[j,n]
+        sol[j*(2*n_Nt+1)+2*n_Nt]=rho[j,2*n_Nt]
+        sol[(2*2*n_Nt+1)*2*Nx+j*(2*n_Nt+1)+2*n_Nt]=V[j,2*n_Nt]
+    return 0
+
+
+import scipy.interpolate as interpolate
+# from scipy.interpolate import barycentric_interpolate
+def interpol(n,new_n,data): # 1D interpolation
+    
+    """" Go from a coarse grid Nt*Nx to a finer grid spacing (2*Nt)*(2*Nx) """""
+    i = np.indices(data.shape)[0]/(n-1)  # [0, ..., 1]
     new_i = np.linspace(0, 1, new_n)
-    new_w=griddata(i, w, new_i, method="cubic")  # method{‘linear’, ‘nearest’, ‘cubic’}
+    # new_data=griddata(i, data, new_i, method="cubic")  # method{‘linear’, ‘nearest’, ‘cubic’}
+    # Create a linear interpolation function based on the original data
+    linear_interpolation_func = interpolate.interp1d(i, data, kind='linear') # ‘linear’, ‘nearest’, ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘previous’, or ‘next’.
+    new_data = linear_interpolation_func(new_i)
+    # new_data=barycentric_interpolate(i, data, new_i) #  polynomial interpolation
+
+    return new_data
+
+def multigrid(old_Nt,new_Nt,w):
+    rho=np.zeros((Nx,old_Nt+1))
+    u=np.zeros((Nx,old_Nt))
+    V=np.zeros((Nx,old_Nt+1))
+    sol_to(old_Nt,w,rho,u,V)
+    new1_rho=np.zeros((2*Nx,old_Nt+1))
+    new1_u=np.zeros((2*Nx,old_Nt))
+    new1_V=np.zeros((2*Nx,old_Nt+1))
+    for n in range(old_Nt):
+        new1_rho[:,n]=interpol(Nx,2*Nx,rho[:,n])
+        new1_u[:,n]=interpol(Nx,2*Nx,u[:,n])
+        new1_V[:,n]=interpol(Nx,2*Nx,V[:,n])
+    new1_rho[:,old_Nt]=interpol(Nx,2*Nx,rho[:,old_Nt])
+    new1_V[:,old_Nt]=interpol(Nx,2*Nx,V[:,old_Nt])
+    new_rho=np.zeros((2*Nx,2*new_Nt+1))
+    new_u=np.zeros((2*Nx,2*new_Nt))
+    new_V=np.zeros((2*Nx,2*new_Nt+1))
+    for j in range(2*Nx):
+        new_rho[j,:]=interpol(old_Nt+1,2*new_Nt+1,new1_rho[j,:])
+        new_u[j,:]=interpol(old_Nt,2*new_Nt,new1_u[j,:])
+        new_V[j,:]=interpol(old_Nt+1,2*new_Nt+1,new1_V[j,:])
+        
+    new_w = np.zeros(3*(2*new_Nt)*(2*Nx)+2*(2*Nx))
+    to_sol(new_Nt,new_w,new_rho,new_u,new_V)
     
-    return Nt_mul*Nt, Nx_mul*Nx, new_w
-
-def solution(sol,rho,u,V,Q):
-    for j in range(1,Nx+1):
-        for n in range(0,Nt):
-            rho[j,n]=sol[(j-1)*(Nt+1)+n]
-            u[j,n]=sol[(Nt+1)*Nx+(j-1)*Nt+n]
-            V[j,n]=sol[(2*Nt+1)*Nx+(j-1)*(Nt+1)+n]
-            Q[j,n]=rho[j,n]*u[j,n]
-        rho[j,Nt]=sol[(j-1)*(Nt+1)+Nt]
-        V[j,Nt]=sol[(2*Nt+1)*Nx+(j-1)*(Nt+1)+Nt]
-    for n in range(0,Nt+1): # periodic boundary conditions
-        rho[0,n]=rho[Nx,n]
-        V[0,n]=V[Nx,n]
-    for n in range(0,Nt):
-        u[0,n]=f_star_p(V[0,n+1]/dx,rho[0,n])
-        Q[0,n]=rho[0,n]*u[0,n]
-#     print("rho=",rho)
-#     print("u=",u)
-#     print("V=",V)
-    return 0
-
-
-def convergence(guess,sol,o):
-    rho=np.zeros((Nx+1,Nt+1))
-    u=np.zeros((Nx+1,Nt))
-    V=np.zeros((Nx+1,Nt+1))
-    Q=np.zeros((Nx+1,Nt))
-    solution(guess,rho,u,V,Q)
-    rho_mfg=np.zeros((Nx+1,Nt+1))
-    u_mfg=np.zeros((Nx+1,Nt))
-    V_mfg=np.zeros((Nx+1,Nt+1))
-    Q_mfg=np.zeros((Nx+1,Nt))
-    solution(sol,rho_mfg,u_mfg,V_mfg,Q_mfg)
-    error=np.linalg.norm(rho_mfg-rho,ord=o)/np.linalg.norm(rho_mfg,ord=o)+np.linalg.norm(u_mfg-u,ord=o)/np.linalg.norm(u_mfg,ord=o)
-    return error
-
-def plotting(text,t,x,rho,u,V,Q,Nx_list,Error_list,fig1,fig2):
-    tt, xx = np.meshgrid(t, x)
-    fig = plt.figure(figsize=(6, 5), dpi=100)
-    ax = fig.gca(projection='3d')
-    ax.plot_surface(xx, tt, rho, cmap=cm.viridis)
-    ax.set_xlabel('$x$')
-    ax.set_ylabel('$t$')
-    ax.set_zlabel('density')
-    ax.invert_xaxis()
-#     ax.text2D(0.05, 0.95, text, transform=ax.transAxes)
-    plt.savefig(fig1)
-
-    plt.figure(figsize=(13, 8))
-    plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.3, hspace=0.4)
-    plt.subplot(2,3,1)
-    plt.plot(x,rho[:,0],'b',label='density')
-    plt.plot(x,u[:,0],'g',label='speed')
-    plt.plot(x,V[:,0],'r',label='Optimal cost')
-    plt.legend()
-    plt.grid()
-    plt.title("t=0.0, T={T}".format(T=T))
-    plt.xlabel('x')
-    plt.subplot(2,3,2)
-    plt.plot(x,rho[:,int(Nt/2)],'b',label='density')
-    plt.plot(x,u[:,int(Nt/2)],'g',label='speed')
-    plt.plot(x,V[:,int(Nt/2)],'r',label='Optimal cost')
-    plt.grid()
-    plt.legend()
-    plt.title("t={t}, T={T}".format(t=round(t[int(Nt/2)],3),T=T))
-    plt.xlabel('x')
-    plt.subplot(2,3,3)
-    plt.plot(x,rho[:,Nt-1],'b',label='density')
-    plt.plot(x,u[:,Nt-1],'g',label='speed')
-    plt.plot(x,V[:,Nt-1],'r',label='Optimal cost')
-    plt.grid()
-    plt.legend()
-    plt.title("t={t}, T={T}".format(t=round(t[Nt-1],3),T=T))
-    plt.xlabel('x')
-    plt.subplot(2,3,4)
-    plt.plot(rho[:,Nt-1],Q[:,Nt-1],label='flow-density')
-    plt.xlabel('density')
-    plt.ylabel('Flow')
-    plt.grid()
-    plt.title("Fundamental diagram (T={T})".format(T=T))
-    plt.subplot(2,3,5)
-    plt.plot(Nx_list,Error_list)
-    plt.xlabel('Spatial grid size')
-    plt.ylabel('error')
-    plt.grid()
-    plt.title("convergence of solution algorithm")
-    plt.savefig(fig2)
-    return 0
+    return new_w
+        
 
 """ solve in coarse grid """
-Nx=10; Nt=5 # spatial-temporal grid sizes 
+Nx=15; Nt=60 # spatial-temporal grid sizes 
 dx=L/Nx # spatial step size
-# dt=min(T/Nt,CFL*dx/abs(u_max)) # temporal step size
-dt=min(T/Nt,CFL*dx/abs(u_max),EPS*(dx**2)/mu) # temporal step size
-# ep1=-mu*dt/(dx**2)  # rho
-ep2=mu*dt/(dx**2) # V
-print('dx={dx}, dt={dt}'.format(dx=round(dx,3),dt=round(dt,3)))
+dt=min(T/Nt,(CFL*dx)/u_max) # temporal step size
+# dt=min(T/Nt,CFL*dx/abs(u_max),EPS*(dx**2)/mu) # temporal step size
+# eps=mu*dt/(dx**2) # V
 x=np.linspace(0,L,Nx+1)
-t=np.linspace(0,T,Nt+1)
+# t=np.linspace(0,T,Nt+1)
+t=np.arange(0,T+dt,dt)
+Nt=len(t)-1
+print('Nx={Nx}, Nt={Nt}'.format(Nx=Nx,Nt=Nt))
+print('dx={dx}, dt={dt}'.format(dx=round(dx,4),dt=round(dt,4)))
 guess0 = np.zeros(3*Nt*Nx+2*Nx)
+# guess0=np.loadtxt('Sol0_LWR_T3_N1.dat')
 t0 = time.process_time()   ###
-sol0 = newton_krylov(F, guess0, method='lgmres', verbose=1, inner_M=get_preconditioner(guess0))
+prec=get_preconditioner(guess0)
 t1 = time.process_time()   ###
-print("Time spent :",t1-t0)
-np.savetxt('Sol0_NonSep_T3_N1_reg.dat', sol0)
-# print('sol0=',sol0)
-""" Error 0 """
-error0=convergence(guess0,sol0,1)
-Error_list.append(error0)
-Nx_list.append(Nx)
-# data = np.loadtxt('SepSol0.dat')
+print("Time spent (anal_precond) :",t1-t0)
+t0 = time.process_time()   ###
+sol0 = newton_krylov(F, guess0, method='gmres', verbose=1, inner_M=prec)
+t1 = time.process_time()   ###
+print("Time spent (gmres) :",t1-t0)
+np.savetxt('Sol0_LWR_T3_N1.dat', sol0)
+
 
 """ solve in finer grid 1 """
-# Nt=20; Nx=20
-# sol0=np.loadtxt('Sol0_NonSep_T10_N1.dat')
-Nt, Nx, guess1=interpol(Nt,2,Nx,2,sol0)
-np.savetxt('Guess1_NonSep_T3_N1_reg.dat', guess1)
-# print('guess1=',guess1)
-dx=L/Nx # spatial step size
-# dt=min(T/Nt,CFL*dx/abs(u_max)) # temporal step size
-dt=min(T/Nt,CFL*dx/abs(u_max),EPS*(dx**2)/mu) # temporal step size
-# ep1=-mu*dt/(dx**2)  # rho
-ep2=mu*dt/(dx**2) # V
+# Nx=15; Nt=60
+# sol0=np.loadtxt('Sol0_LWR_T3_N1.dat')
+Nxx=2*Nx; Ntt=2*Nt
+dx=L/Nxx # spatial step size
+dt=min(T/Ntt,CFL*dx/abs(u_max)) # temporal step size
+# dt=min(T/Ntt,CFL*dx/abs(u_max),EPS*(dx**2)/mu) # temporal step size
+# eps=mu*dt/(dx**2) # V
+x=np.linspace(0,L,Nxx+1)
+t=np.arange(0,T+dt,dt)
+Nt=int((len(t)-1)/2)
+guess1=multigrid(int(Ntt/2),Nt,sol0)
+np.savetxt('Guess1_LWR_T3_N1.dat', guess1)
+Nx=2*Nx; Nt=2*Nt
+print('Nx={Nx}, Nt={Nt}'.format(Nx=Nx,Nt=Nt))
 print('dx={dx}, dt={dt}'.format(dx=round(dx,3),dt=round(dt,3)))
-x=np.linspace(0,L,Nx+1)
-t=np.linspace(0,T,Nt+1)
 t0 = time.process_time()   ###
-sol1 = newton_krylov(F, guess1, method='lgmres', verbose=1, inner_M=get_preconditioner(guess1))
+# guess= np.zeros(3*Nt*Nx+2*Nx)
+prec=get_preconditioner(guess1)
 t1 = time.process_time()   ###
-print("Time spent :",t1-t0)
-np.savetxt('Sol1_NonSep_T3_N1_reg.dat', sol1)
+print("Time spent (jax_precond) :",t1-t0)
+t0 = time.process_time()   ###
+sol1 = newton_krylov(F, guess1, method='gmres', verbose=1, inner_M=prec)
+t1 = time.process_time()   ###
+print("Time spent (gmres) :",t1-t0)
+np.savetxt('Sol1_LWR_T3_N1.dat', sol1)
 # print('sol1=',sol1)
-""" Error 1 """
-error1=convergence(guess1,sol1,1)
-Error_list.append(error1)
 Nx_list.append(Nx)
+Nt_list.append(Nt)
 
 """ solve in finer grid 2 """
-# Nt=20; Nx=20
-# sol0=np.loadtxt('Sol0_NonSep_T10_N1.dat')
-Nt, Nx, guess2=interpol(Nt,2,Nx,2,sol1)
-np.savetxt('Guess2_NonSep_T3_N1_reg.dat', guess2)
-# print('guess2=',guess2)
-dx=L/Nx # spatial step size
-# dt=min(T/Nt,CFL*dx/abs(u_max)) # temporal step size
-dt=min(T/Nt,CFL*dx/abs(u_max),EPS*(dx**2)/mu) # temporal step size
-# ep1=-mu*dt/(dx**2)  # rho
-ep2=mu*dt/(dx**2) # V
+# Nx=30; Nt=180
+# sol1=np.loadtxt('Sol1_LWR_T3_N1.dat')
+Nxx=2*Nx; Ntt=2*Nt
+dx=L/Nxx # spatial step size
+dt=min(T/Ntt,CFL*dx/abs(u_max)) # temporal step size
+# dt=min(T/Ntt,CFL*dx/abs(u_max),EPS*(dx**2)/mu) # temporal step size
+# eps=mu*dt/(dx**2) # V
+print('eps=',eps)
+x=np.linspace(0,L,Nxx+1)
+t=np.arange(0,T+dt,dt)
+Nt=int((len(t)-1)/2)
+guess2=multigrid(int(Ntt/2),Nt,sol1)
+np.savetxt('Guess2_LWR_T3_N1.dat', guess2)
+Nx=2*Nx; Nt=2*Nt
+print('Nx={Nx}, Nt={Nt}'.format(Nx=Nx,Nt=Nt))
 print('dx={dx}, dt={dt}'.format(dx=round(dx,3),dt=round(dt,3)))
-x=np.linspace(0,L,Nx+1)
-t=np.linspace(0,T,Nt+1)
 t0 = time.process_time()   ###
-sol2 = newton_krylov(F, guess2, method='lgmres', verbose=1, inner_M=get_preconditioner(guess2))
+prec=get_preconditioner(guess2)
 t1 = time.process_time()   ###
-print("Time spent :",t1-t0)
-np.savetxt('Sol2_NonSep_T3_N1_reg.dat', sol2)
+print("Time spent (jax_precond) :",t1-t0)
+t0 = time.process_time()   ###
+sol2 = newton_krylov(F, guess2, method='gmres', verbose=1, inner_M=prec)
+t1 = time.process_time()   ###
+print("Time spent (gmres) :",t1-t0)
+np.savetxt('Sol2_LWR_T3_N1.dat', sol2)
 # print('sol2=',sol2)
-""" Error 2 """
-error2=convergence(guess2,sol2,1)
-Error_list.append(error2)
 Nx_list.append(Nx)
+Nt_list.append(Nt)
 
-np.savetxt('Error_NonSep_T3_N1_reg.dat', Error_list)
-np.savetxt('Nx_NonSep_T3_N1_reg.dat', Nx_list)
+""" solve in finer grid 3 """
+# Nx=60; Nt=720
+# sol2=np.loadtxt('Sol2_LWR_T3_N1.dat')
+Nxx=2*Nx; Ntt=2*Nt
+dx=L/Nxx # spatial step size
+dt=min(T/Ntt,CFL*dx/abs(u_max)) # temporal step size
+# dt=min(T/Ntt,CFL*dx/abs(u_max),EPS*(dx**2)/mu) # temporal step size
+# eps=mu*dt/(dx**2) # V
+# print('eps=',eps)
+x=np.linspace(0,L,Nxx+1)
+t=np.arange(0,T+dt,dt)
+Nt=int((len(t)-1)/2)
+guess3=multigrid(int(Ntt/2),Nt,sol2)
+np.savetxt('Guess3_LWRL_T3_N1.dat', guess3)
+Nx=2*Nx; Nt=2*Nt
+print('Nx={Nx}, Nt={Nt}'.format(Nx=Nx,Nt=Nt))
+print('dx={dx}, dt={dt}'.format(dx=round(dx,3),dt=round(dt,3)))
+t0 = time.process_time()   ###
+prec=get_preconditioner(guess3)
+t1 = time.process_time()   ###
+print("Time spent (jax_precond) :",t1-t0)
+t0 = time.process_time()   ###
+sol3 = newton_krylov(F, guess3, method='gmres', verbose=1, inner_M=prec)
+t1 = time.process_time()   ###
+print("Time spent (gmres) :",t1-t0)
+np.savetxt('Sol3_LWR_T3_N1.dat', sol3)
+# # print('sol3=',sol3)
+Nx_list.append(Nx)
+Nt_list.append(Nt)
 
-""" Solutions """
-rho_mfg=np.zeros((Nx+1,Nt+1))
-u_mfg=np.zeros((Nx+1,Nt))
-V_mfg=np.zeros((Nx+1,Nt+1))
-Q_mfg=np.zeros((Nx+1,Nt))
-solution(sol2,rho_mfg,u_mfg,V_mfg,Q_mfg)
-x_mfg=np.linspace(0,L,Nx+1)
-t_mfg=np.linspace(0,T,Nt+1)
+# np.savetxt('Nx_Nt_LWR_T3_N1.dat', [Nx_list,Nt_list])
 
-""" Plots """
-title1="\n Non Viscous MFG-Separable"
-fig1= 'mfg1_NonSep_T3_N1_reg.png'
-fig2= 'mfg2_NonSep_T3_N1_reg.png'
-plotting(title1,t_mfg,x_mfg,rho_mfg,u_mfg,V_mfg,Q_mfg,Nx_list,Error_list,fig1,fig2)
+
+
+
