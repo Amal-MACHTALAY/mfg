@@ -9,7 +9,6 @@ Created on Sat Nov 13 17:44:36 2021
 import numpy as np
 from scipy import integrate
 from scipy.optimize.nonlin import newton_krylov
-# import scipy.sparse.linalg as spla
 import time
 from mpi4py import MPI
 
@@ -34,8 +33,8 @@ mu=0.0 # viscosity coefficient
 Nx_list=[]
 Nt_list=[]
 
-""" grid discretization """
-Nx=120; Nt=4*Nx # spatial-temporal grid sizes 
+""" grid discretization """  ## DONE
+Nx=9; Nt=8 # Final spatial-temporal grid  
 dx=L/Nx # spatial step size
 if mu==0.0:
     dt=min(T/Nt,(CFL*dx)/u_max) # temporal step size
@@ -47,19 +46,21 @@ x=np.linspace(0,L,Nx+1)
 # t=np.linspace(0,T,Nt+1)
 t=np.arange(0,T+dt,dt)
 Nt=len(t)-1
-print('Nx={Nx}, Nt={Nt}'.format(Nx=Nx,Nt=Nt))
-print('dx={dx}, dt={dt}'.format(dx=round(dx,4),dt=round(dt,4)))
+if RANK==0:
+    print('Nx={Nx}, Nt={Nt}'.format(Nx=Nx,Nt=Nt))
+    print('dx={dx}, dt={dt}'.format(dx=round(dx,4),dt=round(dt,4)))
 
 
-""" for MPI : Creates a division of processors in a cartesian grid """
-nx=Nx; nt=Nt+1
+""" for MPI : Creates a division of processors in a cartesian grid """ ## DONE
+nbr_x=Nx+1; nbr_t=Nt+1 # spatial-temporal grid sizes 
+nx=nbr_x-1; nt=nbr_t # number of points for MPI
 px=int(np.sqrt(SIZE))-1 # number of processes on each line-1
 pt=px # number of processes on each column-1
 # print("px={px}, pt={pt}".format(px=px, pt=pt))
 new_size=(px+1)*(pt+1) # the Number of processes to decompose 
 # print('new_size=',new_size)
-nbrx=int(Nx/(px+1)) #number of points for px (except root)
-nbrt=int((Nt+1)/(pt+1)) #number of points for pt (except root)
+nbrx=int(nx/(px+1)) #number of points for px (except root)
+nbrt=int(nt/(pt+1)) #number of points for pt (except root)
 dims=[px+1,pt+1] # The array containing the number of processes to assign to each dimension
 # print('dims=',dims)
 npoints=[nx,nt]
@@ -105,64 +106,50 @@ def rho_int(s): # initial density
 def VT(a): # Terminal cost
     return 0.0
 
-def r_idx(j,n):
-    return (j-1)*(Nt+1)+n
-
-def u_idx(j,n):
-    return (Nt+1)*Nx+(j-1)*Nt+n
-
-def V_idx(j,n):
-    return (2*Nt+1)*Nx+(j-1)*(Nt+1)+n
+def r_idx(j,n): ### Done
+    return j*nby+n
 
 
-def F(w):
-    # FF=[F_rho,F_u,F_V,F_rho_int,F_V_ter], F_rho:0->Nt*Nx-1, F_u:Nt*Nx->2*Nt*Nx-1, F_V:2*Nt*Nx->3*Nt*Nx-1, F_rho_int:3*Nt*Nx->3*Nt*Nx+Nx-1, F_V_ter:3*Nt*Nx+Nx->3*Nt*Nx+2*Nx-1
-    FF=np.zeros(3*Nt*Nx+2*Nx)
-    for n in range(0,Nt):
-        # F_rho , F[0]->F[Nt-1] ************** 1  
-        FF[n]=w[r_idx(1,n+1)]-0.5*(w[r_idx(Nx,n)]+w[r_idx(2,n)])+(0.5*dt/dx)*(w[r_idx(2,n)]*w[u_idx(2,n)]-w[r_idx(Nx,n)]*w[u_idx(Nx,n)])
-        # F_rho , F[Nt*Nx-Nt]->F[Nt*Nx-1] ********** 3 
-        FF[Nt*(Nx-1)+n]=w[r_idx(Nx,n+1)]-0.5*(w[r_idx(Nx-1,n)]+w[r_idx(1,n)])+(0.5*dt/dx)*(w[r_idx(1,n)]*w[u_idx(1,n)]-w[r_idx(Nx-1,n)]*w[u_idx(Nx-1,n)])
-        # F_u , F[Nt*Nx]->F[Nt*Nx+Nt-1] *********** 4 
-        FF[Nt*Nx+n]=w[u_idx(1,n)]-f_star_p((w[V_idx(1,n+1)]-w[V_idx(Nx,n+1)])/dx,w[r_idx(1,n)])
-        # F_u , F[2*Nt*Nx-Nt]->F[2*Nt*Nx-1] ********* 6 
-        FF[2*Nt*Nx-Nt+n]=w[u_idx(Nx,n)]-f_star_p((w[V_idx(Nx,n+1)]-w[V_idx(Nx-1,n+1)])/dx,w[r_idx(Nx,n)])
-        # F_V , F[2*Nt*Nx]->F[2*Nt*Nx+Nt-1] *********** 7 
-        FF[2*Nt*Nx+n]=w[V_idx(1,n+1)]-w[V_idx(1,n)]+dt*f_star((w[V_idx(1,n+1)]-w[V_idx(Nx,n+1)])/dx,w[r_idx(1,n)])+eps*(w[V_idx(2,n+1)]-2*w[V_idx(1,n+1)]+w[V_idx(Nx,n+1)])
-        # F_V , F[3*Nt*Nx-Nt]->F[3*Nt*Nx-1] ********** 9 
-        FF[3*Nt*Nx-Nt+n]=w[V_idx(Nx,n+1)]-w[V_idx(Nx,n)]+dt*f_star((w[V_idx(Nx,n+1)]-w[V_idx(Nx-1,n+1)])/dx,w[r_idx(Nx,n)])+eps*(w[V_idx(1,n+1)]-2*w[V_idx(Nx,n+1)]+w[V_idx(Nx-1,n+1)])
-    for j in range(2,Nx):
-        for n in range(0,Nt):
-            # F_rho , F[Nt]->F[Nt*Nx-Nt-1] ************ 2 
-            FF[(j-1)*Nt+n]=w[r_idx(j,n+1)]-0.5*(w[r_idx(j-1,n)]+w[r_idx(j+1,n)])+(0.5*dt/dx)*(w[r_idx(j+1,n)]*w[u_idx(j+1,n)]-w[r_idx(j-1,n)]*w[u_idx(j-1,n)])
-            # F_u , F[Nt*Nx+Nt]->F[2*Nt*Nx-Nt-1] *********** 5 
-            FF[(j-1)*Nt+Nt*Nx+n]=w[u_idx(j,n)]-f_star_p((w[V_idx(j,n+1)]-w[V_idx(j-1,n+1)])/dx,w[r_idx(j,n)])
-            # F_V , F[2*Nt*Nx+Nt]->F[3*Nt*Nx-Nt-1] ********* 8 
-            FF[(j-1)*Nt+2*Nt*Nx+n]=w[V_idx(j,n+1)]-w[V_idx(j,n)]+dt*f_star((w[V_idx(j,n+1)]-w[V_idx(j-1,n+1)])/dx,w[r_idx(j,n)])+eps*(w[V_idx(j+1,n+1)]-2*w[V_idx(j,n+1)]+w[V_idx(j-1,n+1)])
-        # F_rho_int , F[3*Nt*Nx+1]->F[3*Nt*Nx+Nx-2] ********** 11
-        FF[3*Nt*Nx+j-1]=w[r_idx(j,0)]-(1/dx)*integral(x[j-1],x[j])
-        # F_V_ter , F[3*Nt*Nx+Nx+1]->F[3*Nt*Nx+2*Nx-2] ********* 14
-        FF[3*Nt*Nx+Nx+j-1]=w[V_idx(j,Nt)]-VT(x[j])
-    # F_rho_int , F[3*Nt*Nx] ********* 10
-    FF[3*Nt*Nx]=w[r_idx(1,0)]-(1/dx)*integral(x[0],x[1])
-    # F_rho_int , F[3*Nt*Nx+Nx-1] ********* 12
-    FF[3*Nt*Nx+Nx-1]=w[r_idx(Nx,0)]-(1/dx)*integral(x[Nx-1],x[Nx])
-    # F_V_ter , F[3*Nt*Nx+Nx] *********** 13 
-    FF[3*Nt*Nx+Nx]=w[V_idx(1,Nt)]-VT(x[1])
-    # F_V_ter , F[3*Nt*Nx+2*Nx-1] ************** 15
-    FF[3*Nt*Nx+2*Nx-1]=w[V_idx(Nx,Nt)]-VT(x[Nx])
+def u_idx(j,n): ### Done
+    return nby*nbx+j*nby+n
+
+def V_idx(j,n): ### Done
+    return 2*nby*nbx+j*nby+n
+
+
+def F(w): ## Done
+    # FF=[F_rho,F_u,F_V,F_rho_int,F_V_ter], F_rho:0->F_nby*F_nbx-1, F_u:F_nby*F_nbx->2*F_nby*F_nbx-1, F_V:2*F_nby*F_nbx->3*F_nby*F_nbx-1, F_rho_int:3*F_nby*F_nbx->3*F_nby*F_nbx+F_nbx-1, F_V_ter:3*F_nby*F_nbx+F_nbx->3*F_nby*F_nbx+2*F_nbx-1
+    FF=np.zeros(3*F_nby*F_nbx+2*F_nbx)
+    for j in range(j0,F_Nx+1):
+        for n in range(n0,F_Nt+1):
+            # F_rho , F[0]->F[nby*nbx-1] ************ 1 
+            FF[(j-j0)*F_nby+n-n0]=w[r_idx(j,n+1)]-0.5*(w[r_idx(j-1,n)]+w[r_idx(j+1,n)])+(0.5*dt/dx)*(w[r_idx(j+1,n)]*w[u_idx(j+1,n)]-w[r_idx(j-1,n)]*w[u_idx(j-1,n)])
+            # F_u , F[nby*nbx]->F[2*nby*nbx-1] *********** 2 
+            FF[(j-j0)*F_nby+F_nby*F_nbx+n-n0]=w[u_idx(j,n)]-f_star_p((w[V_idx(j,n+1)]-w[V_idx(j-1,n+1)])/dx,w[r_idx(j,n)])
+            # FF[(j-j0)*F_nby+F_nby*F_nbx+n-n0]=1
+            # F_V , F[2*nby*nbx]->F[3*nby*nbx-1] ********* 3 
+            FF[(j-j0)*F_nby+2*F_nby*F_nbx+n-n0]=w[V_idx(j,n+1)]-w[V_idx(j,n)]+dt*f_star((w[V_idx(j,n+1)]-w[V_idx(j-1,n+1)])/dx,w[r_idx(j,n)])+eps*(w[V_idx(j+1,n+1)]-2*w[V_idx(j,n+1)]+w[V_idx(j-1,n+1)])
+        # F_rho_int , F[3*Nt*Nx+1]->F[3*nby*nbx+nbx-1] ********** 4
+        FF[3*F_nby*F_nbx+j-j0]=w[r_idx(j,n0)]-(1/dx)*integral(x[j-1],x[j])
+        # F_V_ter , F[3*nby*nbx+nbx]->F[3*nby*nbx+2*nbx-1] ********* 5
+        FF[3*F_nby*F_nbx+F_nbx+j-j0]=w[V_idx(j,F_Nt)]-VT(x[j])
     
     return FF
 
 
-def jacobian(w): # Ignoring the forward-backward coupling  parts
-    J=np.zeros((3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx))
-    for n in range(0,Nt):
-        for j in range(1,Nx-1):
-            J[j*Nt+n,j*(Nt+1)+n+1]=1 # F_rho - rho
-            J[j*Nt+n,j*(Nt+1)+n+Nt+1]=(0.5*dt/dx)*w[u_idx(j+2,n)]-0.5 # F_rho -rho
-            J[j*Nt+n,j*(Nt+1)+n-Nt-1]=-(0.5*dt/dx)*w[u_idx(j,n)]-0.5 # F_rho -rho
-            J[j*Nt+n,(Nt+1)*Nx+j*Nt+n+Nt]=(0.5*dt/dx)*w[r_idx(j+2,n)] # F_rho - u
+def jacobian(w): # Ignoring the forward-backward coupling  parts  ????????
+    J=np.zeros((3*F_Nt*F_Nx+2*F_Nx,3*F_Nt*F_Nx+2*F_Nx))
+    for n in range(sy,F_Nt+1):
+        for j in range(sx,F_Nx+1):
+            J[(j-1)*F_Nt+n-1,(j-1)*(F_Nt+1)+n]=1 # F_rho - rho
+            
+            
+            J[(j-1)*F_Nt+n-1,(j-1)*(F_Nt+1)+F_Nt+n]=(0.5*dt/dx)*w[u_idx(j+1,n)]-0.5 # F_rho -rho
+            
+            
+            
+            J[j*F_Nt+n,j*(F_Nt+1)+n-F_Nt-1]=-(0.5*dt/dx)*w[u_idx(j,n)]-0.5 # F_rho -rho
+            J[j*F_Nt+n,(F_Nt+1)*F_Nx+j*F_Nt+n+F_Nt]=(0.5*dt/dx)*w[r_idx(j+2,n)] # F_rho - u
             J[j*Nt+n,(Nt+1)*Nx+j*Nt+n-Nt]=-(0.5*dt/dx)*w[r_idx(j,n)] # F_rho - u
             J[Nt*Nx+j*Nt+n,(Nt+1)*Nx+j*Nt+n]=1 # F_u - u
             J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n]=-1 # F_V - V
@@ -205,83 +192,46 @@ def get_preconditioner(a):
     M=np.linalg.inv(Jac)
     return M
 
+def r_id(j,n): ## Done
+    return (j-1)*(Nt+1)+n
 
-def sol_to(n_Nx,n_Nt,sol,rho,u,V):
-    for j in range(0,n_Nx):
-        for n in range(0,n_Nt):
-            rho[j,n]=sol[j*(n_Nt+1)+n]
-            u[j,n]=sol[(n_Nt+1)*n_Nx+j*n_Nt+n]
-            V[j,n]=sol[(2*n_Nt+1)*n_Nx+j*(n_Nt+1)+n]
-        rho[j,n_Nt]=sol[j*(n_Nt+1)+n_Nt]
-        V[j,n_Nt]=sol[(2*n_Nt+1)*n_Nx+j*(n_Nt+1)+n_Nt]
+def u_id(j,n): ## Done
+    return (Nt+1)*Nx+(j-1)*Nt+n
+
+def V_id(j,n): ## Done
+    return (2*Nt+1)*Nx+(j-1)*(Nt+1)+n
+
+def sol_to(Nx,Nt,sol,rho,u,V): ### Done
+    for j in range(1,Nx+1):
+        for n in range(0,Nt):
+            rho[j,n]=sol[r_id(j,n)]
+            u[j,n]=sol[u_id(j,n)]
+            V[j,n]=sol[V_id(j,n)]
+        rho[j,Nt]=sol[r_id(j,Nt)]
+        V[j,Nt]=sol[V_id(j,Nt)]
     return 0
 
-def to_sol(n_Nx,n_Nt,sol,rho,u,V):
-    for j in range(0,2*n_Nx):
-        for n in range(0,2*n_Nt):
-            sol[j*(2*n_Nt+1)+n]=rho[j,n]
-            sol[(2*n_Nt+1)*2*n_Nx+j*2*n_Nt+n]=u[j,n]
-            sol[(2*2*n_Nt+1)*2*n_Nx+j*(2*n_Nt+1)+n]=V[j,n]
-        sol[j*(2*n_Nt+1)+2*n_Nt]=rho[j,2*n_Nt]
-        sol[(2*2*n_Nt+1)*2*n_Nx+j*(2*n_Nt+1)+2*n_Nt]=V[j,2*n_Nt]
+def to_sol(sol,rho,u,V): ## Done
+    for j in range(sx-1,ex+2):
+        for n in range(sy-1,ey+2):
+            sol[r_idx(j-(sx-1),n-(sy-1))]=rho[IDX(j,n)]
+            sol[u_idx(j-(sx-1),n-(sy-1))]=u[IDX(j,n)]
+            sol[V_idx(j-(sx-1),n-(sy-1))]=V[IDX(j,n)]
     return 0
 
-
-import scipy.interpolate as interpolate
-# from scipy.interpolate import barycentric_interpolate
-# from scipy.interpolate import griddata
-def interpol(n,new_n,data): # 1D interpolation
-    
-    """" Go from a coarse grid Nt*Nx to a finer grid spacing (2*Nt)*(2*Nx) """""
-    i = np.indices(data.shape)[0]/(n-1)  # [0, ..., 1]
-    new_i = np.linspace(0, 1, new_n)
-    # new_data=griddata(i, data, new_i, method="cubic")  # method{‘linear’, ‘nearest’, ‘cubic’}
-    # Create a linear interpolation function based on the original data
-    linear_interpolation_func = interpolate.interp1d(i, data, kind='linear') # ‘linear’, ‘nearest’, ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘previous’, or ‘next’.
-    new_data = linear_interpolation_func(new_i)
-    # new_data=barycentric_interpolate(i, data, new_i) #  polynomial interpolation
-
-    return new_data
-
-def multigrid(old_Nt,new_Nt,w):
-    rho=np.zeros((Nx,old_Nt+1))
-    u=np.zeros((Nx,old_Nt))
-    V=np.zeros((Nx,old_Nt+1))
-    sol_to(old_Nt,w,rho,u,V)
-    new1_rho=np.zeros((2*Nx,old_Nt+1))
-    new1_u=np.zeros((2*Nx,old_Nt))
-    new1_V=np.zeros((2*Nx,old_Nt+1))
-    for n in range(old_Nt):
-        new1_rho[:,n]=interpol(Nx,2*Nx,rho[:,n])
-        new1_u[:,n]=interpol(Nx,2*Nx,u[:,n])
-        new1_V[:,n]=interpol(Nx,2*Nx,V[:,n])
-    new1_rho[:,old_Nt]=interpol(Nx,2*Nx,rho[:,old_Nt])
-    new1_V[:,old_Nt]=interpol(Nx,2*Nx,V[:,old_Nt])
-    new_rho=np.zeros((2*Nx,2*new_Nt+1))
-    new_u=np.zeros((2*Nx,2*new_Nt))
-    new_V=np.zeros((2*Nx,2*new_Nt+1))
-    for j in range(2*Nx):
-        new_rho[j,:]=interpol(old_Nt+1,2*new_Nt+1,new1_rho[j,:])
-        new_u[j,:]=interpol(old_Nt,2*new_Nt,new1_u[j,:])
-        new_V[j,:]=interpol(old_Nt+1,2*new_Nt+1,new1_V[j,:])
-        
-    new_w = np.zeros(3*(2*new_Nt)*(2*Nx)+2*(2*Nx))
-    to_sol(new_Nt,new_w,new_rho,new_u,new_V)
-    
-    return new_w
 
 """ For MPI """
 
-def create_2d_cart(dims,npoints): # return communicator (cart2d) with new cartesian topology
+def create_2d_cart(): # return communicator (cart2d) with new cartesian topology
                                                                                                                                                                                                                                               
     periods = tuple([True, False]) # True : periodic, False : non-periodic Cartesian topology
     reorder = False # the rank of the processes in the new communicator (COMM_2D) is the same as in the old communicator (COMM). 
     
-    if (RANK == 0):
-        print("Exécution avec",SIZE," MPI processes\n"
-                "Taille du domaine : nx=",npoints[0], " nt=",npoints[1],"\n"
-                "Dimension pour la topologie :",dims[0]," along x", dims[1]," along t\n"
-                "-----------------------------------------") 
+    # if (RANK == 0):
+    #     print("Exécution avec",SIZE," MPI processes\n"
+    #             "Taille du domaine : nx=",npoints[0], " nt=",npoints[1],"\n"
+    #             "Dimension pour la topologie :",dims[0]," along x", dims[1]," along t\n"
+    #             "-----------------------------------------") 
 
     cart2d = COMM.Create_cart(dims = dims, periods = periods, reorder = reorder)
     
@@ -300,7 +250,7 @@ def create_neighbours(cart2d): # Find processor neighbors
     neighbour[W],neighbour[E] = cart2d.Shift(direction=0,disp=1) # direction 0: <->
     neighbour[S],neighbour[N] = cart2d.Shift(direction=1,disp=1) # direction 1 : |
     
-    print("I am", RANK," my neighbours are : N", neighbour[N]," E",neighbour[E] ," S ",neighbour[S]," W",neighbour[W])
+    # print("I am", RANK," my neighbours are : N", neighbour[N]," E",neighbour[E] ," S ",neighbour[S]," W",neighbour[W])
 
     return neighbour
 
@@ -316,13 +266,13 @@ def Coords_2D(cart2d):
     ex = int(((coord2d[0] + 1) * npoints[0]) / dims[0])
     ey = int(((coord2d[1] + 1) * npoints[1]) / dims[1])
 
-    print("Rank in the topology :",RANK," Local Grid Index :", sx, " to ",ex," along x, ",
-          sy, " to", ey," along t")
+    # print("Rank in the topology :",RANK," Local Grid Index :", sx, " to ",ex," along x, ",
+    #       sy, " to", ey," along t")
     
     return coord2d, sx, ex, sy, ey
 
 
-def create_derived_type(sx, ex, sy, ey):
+def create_derived_type(sx, ex, sy, ey): 
     
     '''Creation of the type_line derived datatype to exchange points
      with northern to southern neighbours '''
@@ -343,7 +293,7 @@ def create_derived_type(sx, ex, sy, ey):
 
     return type_ligne, type_column
 
-def IDX(i, j): 
+def IDX(i, j): ## Done
         return ( ((i)-(sx-1))*(ey-sy+3) + (j)-(sy-1) )
 
 def communications(u, sx, ex, sy, ey, type_column, type_ligne):
@@ -367,7 +317,7 @@ def communications(u, sx, ex, sy, ey, type_column, type_ligne):
 
     
 
-def initialization(rho0, u0, V0, sx, ex, sy, ey):
+def initialization(rho0, u0, V0, sx, ex, sy, ey):  ## Done
 
     ''' Espacement de la grille dans chaque dimension'''
     
@@ -381,11 +331,11 @@ def initialization(rho0, u0, V0, sx, ex, sy, ey):
     for i in range(sx, ex+1): # x axis
         for j in range(sy, ey+1): # y axis
         
-            rho[IDX(i, j)] = rho0[i-1,j-1]
-            u[IDX(i, j)] = u0[i-1,j-1]
-            V[IDX(i, j)] = V0[i-1,j-1]
+            rho[IDX(i, j)] = rho0[i,j-1]
+            u[IDX(i, j)] = u0[i,j-1]
+            V[IDX(i, j)] = V0[i,j-1]
                    
-    # print("I’m rank :",RANK, "sx",sx,"ex",ex, "sy",sy, "ey",ey," new_u",u)
+    # print("I’m rank :",RANK, "sx",sx,"ex",ex, "sy",sy, "ey",ey," new_rho",rho)
             
     return rho, u, V
 
@@ -403,24 +353,32 @@ def global_error(u, u_new):
     return local_error
         
 
-""" Solve in finer grid """
+""" Solve in grid (Nx,Nt) """
 
-guess0 = np.zeros(3*Nt*Nx+2*Nx)
+### done
+# guess0 = np.zeros(3*Nt*Nx+2*Nx) ## Done
+guess0 = np.arange(0,3*Nt*Nx+2*Nx,1)
 # guess0=np.loadtxt('Sol0_LWR_T3_N1.dat')
-rho0=np.zeros((Nx,Nt+1))
-u0=np.zeros((Nx,Nt+1))
-V0=np.zeros((Nx,Nt+1))
-sol_to(Nt,guess0,rho0,u0,V0)
-# if RANK==0:
-# print('rho0=',rho0)
-# print('u0=',u0)
-# print('V0=',V0)
+rho0=np.zeros((Nx+1,Nt+1))  ## Done
+u0=np.zeros((Nx+1,Nt+1))  ## Done
+V0=np.zeros((Nx+1,Nt+1))  ## Done
+sol_to(Nx,Nt,guess0,rho0,u0,V0)  ## Done
+# if RANK==3:
+#     print('guess0=',guess0)
+#     print('rho0=',rho0)
+    # print('u0=',u0)
+    # print('V0=',V0)
 
-cart2D=create_2d_cart()
-neighbour = create_neighbours(cart2D)
-coord2D, sx, ex, sy, ey = Coords_2D(cart2D)
-type_ligne, type_column = create_derived_type(sx, ex, sy, ey)
-rho, u, V = initialization(rho0, u0, V0, sx, ex, sy, ey)
+cart2D=create_2d_cart() ## Done
+neighbour = create_neighbours(cart2D) ## Done
+coord2D, sx, ex, sy, ey = Coords_2D(cart2D) ## Done
+type_ligne, type_column = create_derived_type(sx, ex, sy, ey) ## Done
+rho, u, V = initialization(rho0, u0, V0, sx, ex, sy, ey) ## Done
+# print("rank",RANK,"len(rho)",len(rho),"len(u)",len(u),"len(V)",len(V))
+# if RANK==0:
+#     print('rho=',rho)
+#     print('u=',u)
+    # print('V=',V)
 rho_new = rho.copy() 
 u_new = u.copy() 
 V_new = V.copy()
@@ -432,91 +390,93 @@ it_max = 100000
 epsilon = 2.e-16
 
 ''' spend time '''
-t1 = MPI.Wtime()
-while (not(convergence) and (it < it_max)):
-    it = it+1;
+# t1 = MPI.Wtime()
+# while (not(convergence) and (it < it_max)):
+#     it = it+1;
+# ------>
+rho_temp = rho.copy() 
+u_temp = u.copy() 
+V_temp = V.copy() 
+rho = rho_new.copy()
+u = u_new.copy() 
+V = V_new.copy() 
+rho_new = rho_temp.copy()
+u_new = u_temp.copy()
+V_new = V_temp.copy()    
+    
 
-    rho_temp = rho.copy() 
-    u_temp = u.copy() 
-    V_temp = V.copy() 
-    rho = rho_new.copy()
-    u = u_new.copy() 
-    V = V_new.copy() 
-    rho_new = rho_temp.copy()
-    u_new = u_temp.copy()
-    V_new = V_temp.copy()
-    
-    ''' Échange des interfaces à la n itération '''
-    communications(rho, sx, ex, sy, ey, type_column, type_ligne)
-    communications(u, sx, ex, sy, ey, type_column, type_ligne)
-    communications(V, sx, ex, sy, ey, type_column, type_ligne)
+# ''' Échange des interfaces à la n itération '''
+# communications(rho, sx, ex, sy, ey, type_column, type_ligne)
+# communications(u, sx, ex, sy, ey, type_column, type_ligne)
+# communications(V, sx, ex, sy, ey, type_column, type_ligne)
  
-    '''Calcul de rho_new, u_new et V_new à l’itération n 1 '''
-    nbx=ex-sx+1
-    nby=ey-sy+1
-    guess=np.zeros(3*nbx*nby+2*nbx)
-    to_sol(nbx,nby,guess,rho,u,V)
+'''Calcul de rho_new, u_new et V_new à l’itération n 1 '''
+nbx=ex-sx+3 ## Done
+nby=ey-sy+3 ## Done
+guess=np.zeros(3*nbx*nby) ## Done
+to_sol(guess,rho,u,V) ## Done
+# if RANK==0:
+    # print(nbx,nby,len(rho),len(u),len(V),len(guess))
+    # print('guess=',guess)
+
+
+
+j0=sx; F_Nx=ex; F_Nt=ey-1    
+if coord2D[1]==0:
+    n0=sy
+else:
+    n0=sy-1
+F_nbx=F_Nx-j0+1
+F_nby=F_Nt-n0+1
+print(RANK,coord2D[0],coord2D[1],"*********",n0,F_Nt,F_nby,"**",j0,F_Nx,F_nbx,"***",3*F_nby*F_nbx+2*F_nbx)
+if RANK==2:
+    print(F(guess))
+    print(len(F(guess)))
+
+
+# t0 = time.process_time()   ###
+# prec=get_preconditioner(guess)
+# t1 = time.process_time()   ###
+# print("Time spent (anal_precond) :",t1-t0)
     
-    t0 = time.process_time()   ###
-    prec=get_preconditioner(guess)
-    t1 = time.process_time()   ###
-    print("Time spent (anal_precond) :",t1-t0)
+#     t0 = time.process_time()   ###
+#     # sol0 = newton_gmres(guess0, F, prec, 0.001, 1e-6)
+#     sol= newton_krylov(F, guess, method='gmres', verbose=1, inner_M=prec)
+#     # print('sol=',sol)
+#     t1 = time.process_time()   ###
+#     print("Time spent (gmres) :",t1-t0)
     
-    t0 = time.process_time()   ###
-    # sol0 = newton_gmres(guess0, F, prec, 0.001, 1e-6)
-    sol= newton_krylov(F, guess, method='gmres', verbose=1, inner_M=prec)
-    # print('sol=',sol)
-    t1 = time.process_time()   ###
-    print("Time spent (gmres) :",t1-t0)
+#     sol_to(nbx,nby,sol,rho_new,u_new,V_new)
     
-    sol_to(nbx,nby,sol,rho_new,u_new,V_new)
-    
-    ''' Computation of the global error '''
-    r_local_error = global_error(rho, rho_new);
-    r_diffnorm = COMM.allreduce(np.array(r_local_error), op=MPI.MAX )  
-    u_local_error = global_error(u, u_new);
-    u_diffnorm = COMM.allreduce(np.array(u_local_error), op=MPI.MAX )
-    V_local_error = global_error(V, V_new);
-    V_diffnorm = COMM.allreduce(np.array(V_local_error), op=MPI.MAX )
+#     ''' Computation of the global error '''
+#     r_local_error = global_error(rho, rho_new);
+#     r_diffnorm = COMM.allreduce(np.array(r_local_error), op=MPI.MAX )  
+#     u_local_error = global_error(u, u_new);
+#     u_diffnorm = COMM.allreduce(np.array(u_local_error), op=MPI.MAX )
+#     V_local_error = global_error(V, V_new);
+#     V_diffnorm = COMM.allreduce(np.array(V_local_error), op=MPI.MAX )
    
-    ''' Stop si nous avons obtenu la précision de la machine '''
-    convergence = (r_diffnorm < epsilon and u_diffnorm < epsilon and V_diffnorm < epsilon)
+#     ''' Stop si nous avons obtenu la précision de la machine '''
+#     convergence = (r_diffnorm < epsilon and u_diffnorm < epsilon and V_diffnorm < epsilon)
     
-    ''' Print diffnorm poue le processus 0 '''
-    if ((RANK == 0) and ((it % 100) == 0)):
-        print("Iteration", it, " global_error = ", max(r_diffnorm,u_diffnorm,V_diffnorm));
+#     ''' Print diffnorm poue le processus 0 '''
+#     if ((RANK == 0) and ((it % 100) == 0)):
+#         print("Iteration", it, " global_error = ", max(r_diffnorm,u_diffnorm,V_diffnorm));
     
         
-''' temps écoulé '''
-t2 = MPI.Wtime()
+# ''' temps écoulé '''
+# t2 = MPI.Wtime()
 
-if (RANK == 0):
-    ''' Print temp de convergence pour le processus 0 '''
-    print("convergence après:",it, 'l iterations in', t2-t1,'secs')
+# if (RANK == 0):
+#     ''' Print temp de convergence pour le processus 0 '''
+#     print("convergence après:",it, 'l iterations in', t2-t1,'secs')
 
-    '''Comparer avec la solution exacte du processus 0 '''
-    # results(u, u_exact)
-    # plot_2d(u)
+#     '''Comparer avec la solution exacte du processus 0 '''
+#     # results(u, u_exact)
+#     # plot_2d(u)
 
 
-np.savetxt('Sol0_LWR_T3_N1.dat', sol)
-
-""" solve in finer grid 1 """
-# Nx=15; Nt=60
-# sol0=np.loadtxt('Sol0_LWR_T3_N1.dat')
-Nxx=2*Nx; Ntt=2*Nt
-dx=L/Nxx # spatial step size
-if mu==0.0:
-    dt=min(T/Ntt,CFL*dx/abs(u_max)) # temporal step size
-    eps=0.0
-else:
-    dt=min(T/Ntt,CFL*dx/abs(u_max),EPS*(dx**2)/mu) # temporal step size
-    eps=mu*dt/(dx**2) # V
-x=np.linspace(0,L,Nxx+1)
-t=np.arange(0,T+dt,dt)
-Nt=int((len(t)-1)/2)
-guess1=multigrid(int(Ntt/2),Nt,sol)
-np.savetxt('Guess1_LWR_T3_N1.dat', guess1)
+# np.savetxt('Sol0_LWR_T3_N1.dat', sol)
 
 
 
@@ -537,106 +497,8 @@ np.savetxt('Guess1_LWR_T3_N1.dat', guess1)
 
 
 
-# """ solve in finer grid 1 """
-# # Nx=15; Nt=60
-# # sol0=np.loadtxt('Sol0_LWR_T3_N1.dat')
-# Nxx=2*Nx; Ntt=2*Nt
-# dx=L/Nxx # spatial step size
-# if mu==0.0:
-#     dt=min(T/Ntt,CFL*dx/abs(u_max)) # temporal step size
-#     eps=0.0
-# else:
-#     dt=min(T/Ntt,CFL*dx/abs(u_max),EPS*(dx**2)/mu) # temporal step size
-#     eps=mu*dt/(dx**2) # V
-# x=np.linspace(0,L,Nxx+1)
-# t=np.arange(0,T+dt,dt)
-# Nt=int((len(t)-1)/2)
-# guess1=multigrid(int(Ntt/2),Nt,sol0)
-# np.savetxt('Guess1_LWR_T3_N1.dat', guess1)
-# Nx=2*Nx; Nt=2*Nt
-# print('Nx={Nx}, Nt={Nt}'.format(Nx=Nx,Nt=Nt))
-# print('dx={dx}, dt={dt}'.format(dx=round(dx,3),dt=round(dt,3)))
-# t0 = time.process_time()   ###
-# # guess= np.zeros(3*Nt*Nx+2*Nx)
-# prec=get_preconditioner(guess1)
-# t1 = time.process_time()   ###
-# print("Time spent (jax_precond) :",t1-t0)
-# t0 = time.process_time()   ###
-# sol1 = newton_krylov(F, guess1, method='gmres', verbose=1, inner_M=prec)
-# t1 = time.process_time()   ###
-# print("Time spent (gmres) :",t1-t0)
-# np.savetxt('Sol1_LWR_T3_N1.dat', sol1)
-# # print('sol1=',sol1)
-# Nx_list.append(Nx)
-# Nt_list.append(Nt)
 
-# """ solve in finer grid 2 """
-# # Nx=30; Nt=180
-# # sol1=np.loadtxt('Sol1_LWR_T3_N1.dat')
-# Nxx=2*Nx; Ntt=2*Nt
-# dx=L/Nxx # spatial step size
-# dx=L/Nxx # spatial step size
-# if mu==0.0:
-#     dt=min(T/Ntt,CFL*dx/abs(u_max)) # temporal step size
-#     eps=0.0
-# else:
-#     dt=min(T/Ntt,CFL*dx/abs(u_max),EPS*(dx**2)/mu) # temporal step size
-#     eps=mu*dt/(dx**2) # V
-# x=np.linspace(0,L,Nxx+1)
-# t=np.arange(0,T+dt,dt)
-# Nt=int((len(t)-1)/2)
-# guess2=multigrid(int(Ntt/2),Nt,sol1)
-# np.savetxt('Guess2_LWR_T3_N1.dat', guess2)
-# Nx=2*Nx; Nt=2*Nt
-# print('Nx={Nx}, Nt={Nt}'.format(Nx=Nx,Nt=Nt))
-# print('dx={dx}, dt={dt}'.format(dx=round(dx,3),dt=round(dt,3)))
-# t0 = time.process_time()   ###
-# prec=get_preconditioner(guess2)
-# t1 = time.process_time()   ###
-# print("Time spent (jax_precond) :",t1-t0)
-# t0 = time.process_time()   ###
-# sol2 = newton_krylov(F, guess2, method='gmres', verbose=1, inner_M=prec)
-# t1 = time.process_time()   ###
-# print("Time spent (gmres) :",t1-t0)
-# np.savetxt('Sol2_LWR_T3_N1.dat', sol2)
-# # print('sol2=',sol2)
-# Nx_list.append(Nx)
-# Nt_list.append(Nt)
 
-# """ solve in finer grid 3 """
-# # Nx=60; Nt=720
-# # sol2=np.loadtxt('Sol2_LWR_T3_N1.dat')
-# Nxx=2*Nx; Ntt=2*Nt
-# dx=L/Nxx # spatial step size
-# dx=L/Nxx # spatial step size
-# if mu==0.0:
-#     dt=min(T/Ntt,CFL*dx/abs(u_max)) # temporal step size
-#     eps=0.0
-# else:
-#     dt=min(T/Ntt,CFL*dx/abs(u_max),EPS*(dx**2)/mu) # temporal step size
-#     eps=mu*dt/(dx**2) # V
-# x=np.linspace(0,L,Nxx+1)
-# t=np.arange(0,T+dt,dt)
-# Nt=int((len(t)-1)/2)
-# guess3=multigrid(int(Ntt/2),Nt,sol2)
-# np.savetxt('Guess3_LWRL_T3_N1.dat', guess3)
-# Nx=2*Nx; Nt=2*Nt
-# print('Nx={Nx}, Nt={Nt}'.format(Nx=Nx,Nt=Nt))
-# print('dx={dx}, dt={dt}'.format(dx=round(dx,3),dt=round(dt,3)))
-# t0 = time.process_time()   ###
-# prec=get_preconditioner(guess3)
-# t1 = time.process_time()   ###
-# print("Time spent (jax_precond) :",t1-t0)
-# t0 = time.process_time()   ###
-# sol3 = newton_krylov(F, guess3, method='gmres', verbose=1, inner_M=prec)
-# t1 = time.process_time()   ###
-# print("Time spent (gmres) :",t1-t0)
-# np.savetxt('Sol3_LWR_T3_N1.dat', sol3)
-# # # print('sol3=',sol3)
-# Nx_list.append(Nx)
-# Nt_list.append(Nt)
-
-# # np.savetxt('Nx_Nt_LWR_T3_N1.dat', [Nx_list,Nt_list])
 
 
 
