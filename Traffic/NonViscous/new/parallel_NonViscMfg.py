@@ -9,7 +9,7 @@ Created on Sat Nov 13 17:44:36 2021
 import numpy as np
 from scipy import integrate
 from scipy.optimize.nonlin import newton_krylov
-import time
+# import time
 from mpi4py import MPI
 
 COMM = MPI.COMM_WORLD  # The default communicator
@@ -50,8 +50,8 @@ if RANK==0:
     print('Nx={Nx}, Nt={Nt}'.format(Nx=Nx,Nt=Nt))
     print('dx={dx}, dt={dt}'.format(dx=round(dx,4),dt=round(dt,4)))
     
-# guess0 = np.zeros(3*Nt*Nx+2*Nx) ## Done
-guess0 = np.arange(0,3*Nt*Nx+2*Nx,1)
+guess0 = np.zeros(3*Nt*Nx+2*Nx) ## Done
+# guess0 = np.arange(0,3*Nt*Nx+2*Nx,1)
 # guess0=np.loadtxt('Sol0_LWR_T3_N1.dat')
 
 
@@ -164,6 +164,8 @@ def communications(u, sx, ex, sy, ey, type_column, type_ligne):
     ''' Envoyer au voisin E et recevoir du voisin W ''' #type_column
     COMM.Send([u[IDX(sx, ey) : ], 1, type_column], dest=neighbour[E]) #IDX(sx, ey)XX
     COMM.Recv([u[IDX(sx, sy-1) : ], 1, type_column], source=neighbour[W]) #IDX(sx-1, sy)XX
+    
+    return 0
 
 
 cart2D=create_2d_cart() ## Done
@@ -206,11 +208,11 @@ rho0=np.zeros((Nx+1,Nt+1))  ## Done
 u0=np.zeros((Nx+1,Nt+1))  ## Done
 V0=np.zeros((Nx+1,Nt+1))  ## Done
 to_solution(Nx,Nt,guess0,rho0,u0,V0)  ## Done
-# if RANK==3:
+# if RANK==0:
 #     print('guess0=',guess0)
 #     print('rho0=',rho0)
-    # print('u0=',u0)
-    # print('V0=',V0)
+#     print('u0=',u0)
+#     print('V0=',V0)
 
 def initialization(rho0, u0, V0, sx, ex, sy, ey):  
     
@@ -234,10 +236,10 @@ def initialization(rho0, u0, V0, sx, ex, sy, ey):
 
 rho, u, V = initialization(rho0, u0, V0, sx, ex, sy, ey) ## Done
 # print("rank",RANK,"len(rho)",len(rho),"len(u)",len(u),"len(V)",len(V))
-# if RANK==0:
+# if RANK==3:
 #     print('rho=',rho)
 #     print('u=',u)
-    # print('V=',V)
+#     print('V=',V)
     
 def r_idx(j,n): 
     return (j-(sx-1))*w_nby+(n-(sy-1))
@@ -264,6 +266,33 @@ def sol_to(sol,rho,u,V):
             V[IDX(j,n)]=sol[V_idx(j,n)]
     return 0
 
+def r_idx_loc(j,n): 
+        return (j-j0)*(F_nby+1)+(n-n0)
+
+def u_idx_loc(j,n): 
+    return (F_nby+1)*F_nbx+(j-j0)*F_nby+(n-n0)
+
+def V_idx_loc(j,n): 
+    return 2*F_nby*F_nbx+F_nbx+(j-j0)*(F_nby+1)+(n-n0)
+
+def global_to_local(local_sol,global_sol):  ### Done
+    for j in range(j0,F_Nx+1):
+        for n in range(n0,F_Nt+1):
+            local_sol[r_idx_loc(j,n)]=global_sol[r_idx(j,n)]
+            if n!=F_Nt:
+                local_sol[u_idx_loc(j,n)]=global_sol[u_idx(j,n)]
+            local_sol[V_idx_loc(j,n)]=global_sol[V_idx(j,n)]
+    return 0
+
+def local_sol_to(sol,rho,u,V):  ###?
+        for j in range(j0,F_Nx+1):
+            for n in range(n0,F_Nt+1):
+                rho[IDX(j,n)]=sol[r_idx_loc(j,n)]
+                if n!=F_Nt:
+                    u[IDX(j,n)]=sol[u_idx_loc(j,n)]
+                V[IDX(j,n)]=sol[V_idx_loc(j,n)]
+        return 0
+    
 ''' MFG functions....................................................................................................... ''' ## DONE
 def U(rho): # Greenshields desired speed
     return u_max*(1-rho/rho_jam)
@@ -303,51 +332,104 @@ def rho_int(s): # initial density
 def VT(a): # Terminal cost
     return 0.0
 
-def F(w): 
-    # FF=[F_rho,F_u,F_V,F_rho_int,F_V_ter]
-    FF=np.zeros(3*F_nby*F_nbx+2*F_nbx)
-    for j in range(j0,F_Nx+1):
-        for n in range(n0,F_Nt+1):
+def Fr_idx_loc(j,n): 
+        return (j-j0)*F_nby+(n-n0)
+
+def Fu_idx_loc(j,n): 
+    return F_nby*F_nbx+(j-j0)*F_nby+(n-n0)
+
+def FV_idx_loc(j,n): 
+    return 2*F_nby*F_nbx+(j-j0)*F_nby+(n-n0)
+
+def get_newton_krylov(w,wloc):
+    
+    def F(wloc): 
+        # FF=[F_rho,F_u,F_V,F_rho_int,F_V_ter]
+        FF=np.zeros(3*F_nby*F_nbx+2*F_nbx)
+        for n in range(n0,F_Nt):
+            for j in range(j0+1,F_Nx):
+                # F_rho , F[0]->F[F_nby*F_nbx-1] ************ 2 
+                FF[Fr_idx_loc(j,n)]=wloc[r_idx_loc(j,n+1)]-0.5*(wloc[r_idx_loc(j-1,n)]+wloc[r_idx_loc(j+1,n)])
+                +(0.5*dt/dx)*(wloc[r_idx_loc(j+1,n)]*wloc[u_idx_loc(j+1,n)]-wloc[r_idx_loc(j-1,n)]*wloc[u_idx_loc(j-1,n)])
+                # F_u , F[F_nby*F_nbx]->F[2*F_nby*F_nbx-1] *********** 5
+                FF[Fu_idx_loc(j,n)]=wloc[u_idx_loc(j,n)]-f_star_p((wloc[V_idx_loc(j,n+1)]-wloc[V_idx_loc(j-1,n+1)])/dx,wloc[r_idx_loc(j,n)])
+                # F_V , F[2*F_nby*F_nbx]->F[3*F_nby*F_nbx-1] ********* 8 
+                FF[FV_idx_loc(j,n)]=wloc[V_idx_loc(j,n+1)]-wloc[V_idx_loc(j,n)]
+                +dt*f_star((wloc[V_idx_loc(j,n+1)]-wloc[V_idx_loc(j-1,n+1)])/dx,wloc[r_idx_loc(j,n)])
+                +eps*(wloc[V_idx_loc(j+1,n+1)]-2*wloc[V_idx_loc(j,n+1)]+wloc[V_idx_loc(j-1,n+1)])
+        
             # F_rho , F[0]->F[F_nby*F_nbx-1] ************ 1 
-            FF[(j-j0)*F_nby+n-n0]=w[r_idx(j,n+1)]-0.5*(w[r_idx(j-1,n)]+w[r_idx(j+1,n)])
-            +(0.5*dt/dx)*(w[r_idx(j+1,n)]*w[u_idx(j+1,n)]-w[r_idx(j-1,n)]*w[u_idx(j-1,n)])
-            # F_u , F[F_nby*F_nbx]->F[2*F_nby*F_nbx-1] *********** 2 
-            FF[F_nby*F_nbx+(j-j0)*F_nby+n-n0]=w[u_idx(j,n)]-f_star_p((w[V_idx(j,n+1)]-w[V_idx(j-1,n+1)])/dx,w[r_idx(j,n)])
-            # F_V , F[2*F_nby*F_nbx]->F[3*F_nby*F_nbx-1] ********* 3 
-            FF[2*F_nby*F_nbx+(j-j0)*F_nby+n-n0]=w[V_idx(j,n+1)]-w[V_idx(j,n)]+dt*f_star((w[V_idx(j,n+1)]-w[V_idx(j-1,n+1)])/dx,w[r_idx(j,n)])
-            +eps*(w[V_idx(j+1,n+1)]-2*w[V_idx(j,n+1)]+w[V_idx(j-1,n+1)])
-        # F_rho_int , F[3*F_nby*F_nbx]->F[3*F_nby*F_nbx+F_nbx-1] ********** 4
-        FF[3*F_nby*F_nbx+j-j0]=w[r_idx(j,n0)]-(1/dx)*integral(x[j-1],x[j])
-        # F_V_ter , F[3*F_nby*F_nbx+F_nbx]->F[3*F_nby*F_nbx+2*F_nbx-1] ********* 5
-        FF[3*F_nby*F_nbx+F_nbx+j-j0]=w[V_idx(j,F_Nt)]-VT(x[j])
+            FF[Fr_idx_loc(j0,n)]=wloc[r_idx_loc(j0,n+1)]-0.5*(w[r_idx(j0-1,n)]+wloc[r_idx_loc(j0+1,n)])
+            +(0.5*dt/dx)*(wloc[r_idx_loc(j0+1,n)]*wloc[u_idx_loc(j0+1,n)]-w[r_idx(j0-1,n)]*w[u_idx(j0-1,n)])
+            # F_u , F[F_nby*F_nbx]->F[2*F_nby*F_nbx-1] *********** 4 
+            FF[Fu_idx_loc(j0,n)]=wloc[u_idx_loc(j0,n)]-f_star_p((wloc[V_idx_loc(j0,n+1)]-w[V_idx(j0-1,n+1)])/dx,wloc[r_idx_loc(j0,n)])
+            # F_V , F[2*F_nby*F_nbx]->F[3*F_nby*F_nbx-1] ********* 7 
+            FF[FV_idx_loc(j0,n)]=wloc[V_idx_loc(j0,n+1)]-wloc[V_idx_loc(j0,n)]
+            +dt*f_star((wloc[V_idx_loc(j0,n+1)]-w[V_idx(j0-1,n+1)])/dx,wloc[r_idx_loc(j0,n)])
+            +eps*(wloc[V_idx_loc(j0+1,n+1)]-2*wloc[V_idx_loc(j0,n+1)]+w[V_idx(j0-1,n+1)])
+        
+            # F_rho , F[0]->F[F_nby*F_nbx-1] ************ 3 
+            FF[Fr_idx_loc(F_Nx,n)]=wloc[r_idx_loc(F_Nx,n+1)]-0.5*(wloc[r_idx_loc(F_Nx-1,n)]+w[r_idx(F_Nx+1,n)])
+            +(0.5*dt/dx)*(w[r_idx(F_Nx+1,n)]*w[u_idx(F_Nx+1,n)]-wloc[r_idx_loc(F_Nx-1,n)]*wloc[u_idx_loc(F_Nx-1,n)])
+            # F_u , F[F_nby*F_nbx]->F[2*F_nby*F_nbx-1] *********** 6 
+            FF[Fu_idx_loc(F_Nx,n)]=wloc[u_idx_loc(F_Nx,n)]-f_star_p((wloc[V_idx_loc(F_Nx,n+1)]-wloc[V_idx_loc(F_Nx-1,n+1)])/dx,wloc[r_idx_loc(F_Nx,n)])
+            # F_V , F[2*F_nby*F_nbx]->F[3*F_nby*F_nbx-1] ********* 9 
+            FF[FV_idx_loc(F_Nx,n)]=wloc[V_idx_loc(F_Nx,n+1)]-wloc[V_idx_loc(F_Nx,n)]
+            +dt*f_star((wloc[V_idx_loc(F_Nx,n+1)]-wloc[V_idx_loc(F_Nx-1,n+1)])/dx,wloc[r_idx_loc(F_Nx,n)])
+            +eps*(w[V_idx(F_Nx+1,n+1)]-2*wloc[V_idx_loc(F_Nx,n+1)]+wloc[V_idx_loc(F_Nx-1,n+1)])
+            
+                       
+        for j in range(j0,F_Nx+1):    
+            # F_rho_int , F[3*F_nby*F_nbx]->F[3*F_nby*F_nbx+F_nbx-1] ********** 10
+            FF[3*F_nby*F_nbx+j-j0]=wloc[r_idx_loc(j,n0)]-(1/dx)*integral(x[j-1],x[j])
+            # F_V_ter , F[3*F_nby*F_nbx+F_nbx]->F[3*F_nby*F_nbx+2*F_nbx-1] ********* 11
+            FF[3*F_nby*F_nbx+F_nbx+j-j0]=wloc[V_idx_loc(j,F_Nt)]-VT(x[j])
+            
+            
+            
+        return FF
     
-    return FF
-
-def jacobian(w): # Ignoring the forward-backward coupling  parts  
-    J=np.zeros((3*F_nby*F_nbx+2*F_nbx,3*F_nby*F_nbx+2*F_nbx))
-    for j in range(j0,F_Nx+1):
-        for n in range(n0,F_Nt+1):
-            J[(j-j0)*F_nby+n-n0,(j-j0)*(F_nby+1)+n-n0+1]=1 # F_rho - rho
-            if j!=F_Nx:
-                J[(j-j0)*F_nby+n-n0,(j-j0)*(F_nby+1)+F_nby+n-n0+1]=(0.5*dt/dx)*w[u_idx(j+1,n)]-0.5 # F_rho -rho
-                J[(j-j0)*F_nby+n-n0,(F_nby+1)*F_nbx+(j-j0)*F_nby+F_nby+n-n0]=(0.5*dt/dx)*w[r_idx(j+1,n)] # F_rho - u
-                J[2*F_nby*F_nbx+(j-j0)*F_nby+n-n0,(2*F_nby+1)*F_nbx+F_nby+1+(j-j0)*(F_nby+1)+n-n0+1]=eps # F_V - V 
-            if j!=j0:
-                J[(j-j0)*F_nby+n-n0,(j-j0)*(F_nby+1)-F_nby+n-n0-1]=-(0.5*dt/dx)*w[u_idx(j-1,n)]-0.5 # F_rho -rho
-                J[(j-j0)*F_nby+n-n0,(F_nby+1)*F_nbx+(j-j0)*F_nby-F_nby+n-n0]=-(0.5*dt/dx)*w[r_idx(j-1,n)] # F_rho - u
-                J[2*F_nby*F_nbx+(j-j0)*F_nby+n-n0,(2*F_nby+1)*F_nbx+(j-j0)*(F_nby+1)+n-n0+1]=eps # F_V - V
-            J[F_nby*F_nbx+(j-j0)*F_nby+n-n0,(F_nby+1)*F_nbx+(j-j0)*F_nby+n-n0]=1 # F_u - u
-            J[2*F_nby*F_nbx+(j-j0)*F_nby+n-n0,(2*F_nby+1)*F_nbx+(j-j0)*(F_nby+1)+n-n0]=-1 # F_V - V
-            J[2*F_nby*F_nbx+(j-j0)*F_nby+n-n0,(2*F_nby+1)*F_nbx+(j-j0)*(F_nby+1)+n-n0+1]=1-2*eps # F_V - V 
-        J[3*F_nby*F_nbx+(j-j0),(F_nby+1)*(j-j0)]=1 # F_rho_int - rho
-        J[3*F_nby*F_nbx+F_nbx+(j-j0),(2*F_nby+1)*F_nbx+(F_nby+1)*(j-j0)+F_nby-1]=1 # F_V_ter - V
+    def jacobian(wloc): # Ignoring the forward-backward coupling  parts  
+        J=np.zeros((3*F_nby*F_nbx+2*F_nbx,3*F_nby*F_nbx+2*F_nbx))
+        for j in range(j0,F_Nx+1):
+            for n in range(n0,F_Nt):
+                J[Fr_idx_loc(j,n),r_idx_loc(j,n)+1]=1 # F_rho - rho
+                if j!=F_Nx:
+                    J[Fr_idx_loc(j,n),r_idx_loc(j,n)+F_nby+1]=(0.5*dt/dx)*wloc[u_idx_loc(j+1,n)]-0.5 # F_rho -rho
+                    J[Fr_idx_loc(j,n),u_idx_loc(j,n)+F_nby]=(0.5*dt/dx)*wloc[r_idx_loc(j+1,n)] # F_rho - u
+                    J[FV_idx_loc(j,n),V_idx_loc(j,n)+(F_nby+1)+1]=eps # F_V - V 
+                if j!=j0:
+                    J[Fr_idx_loc(j,n),r_idx_loc(j,n)-F_nby-1]=-(0.5*dt/dx)*wloc[u_idx_loc(j-1,n)]-0.5 # F_rho -rho
+                    J[Fr_idx_loc(j,n),u_idx_loc(j,n)-F_nby]=-(0.5*dt/dx)*wloc[r_idx_loc(j-1,n)] # F_rho - u
+                    J[FV_idx_loc(j,n),V_idx_loc(j,n)+1]=eps # F_V - V
+                J[Fu_idx_loc(j,n),u_idx_loc(j,n)]=1 # F_u - u
+                J[FV_idx_loc(j,n),V_idx_loc(j,n)]=-1 # F_V - V
+                J[FV_idx_loc(j,n),V_idx_loc(j,n)+1]=1-2*eps # F_V - V 
+            J[3*F_nby*F_nbx+(j-j0),r_idx_loc(j,n0)]=1 # F_rho_int - rho
+            J[3*F_nby*F_nbx+F_nbx+(j-j0),V_idx_loc(j,n0)+F_nby-1]=1 # F_V_ter - V
+        
+        return J
     
-    return J
-
-def get_preconditioner(a):
-    Jac=jacobian(a)
-    M=np.linalg.inv(Jac)
-    return M
+    # if RANK==0:
+    #     print('F(wloc)=',F(wloc))
+    # get_preconditioner
+    # t0 = time.process_time()   ###
+    Jac=jacobian(wloc)
+    prec=np.linalg.inv(Jac)
+    # if RANK==0:
+    #     print('prec=',prec)
+    # t1 = time.process_time()   ###
+    # print("Time spent (anal_precond) :",t1-t0)
+        
+    # t0 = time.process_time()   ###
+    solu= newton_krylov(F, wloc, method='gmres', verbose=1, inner_M=prec)
+    # print('sol=',solu)
+    # t1 = time.process_time()   ###
+    # print("Time spent (gmres) :",t1-t0)
+    
+    return solu
+    # return 0
+    
 
 ''' Calcul of global erreur............................................................................................. '''
 def global_error(w, w_new): 
@@ -397,38 +479,43 @@ while (not(convergence) and (it < it_max)):
     communications(V, sx, ex, sy, ey, type_column, type_ligne)
      
     '''Calcul de rho_new, u_new et V_new à l’itération n 1 '''
+    
+    '''  Global guess '''
     w_nbx=ex-sx+3 ## Done
     w_nby=ey-sy+3 ## Done
-    guess=np.zeros(3*w_nbx*w_nby) ## Done
-    to_sol(guess,rho,u,V) ## Done
-    # print(RANK,len(guess))
-    # if RANK==0:
-        # print(w_nbx,w_nby,len(rho),len(u),len(V),len(guess))
-        # print('guess=',guess)
+    guess_glob=np.zeros(3*w_nbx*w_nby) ## Done
+    to_sol(guess_glob,rho,u,V) ## Done
+    # print(RANK,len(guess_glob))
+    # if RANK==3:
+        # print(w_nbx,w_nby,len(rho),len(u),len(V),len(guess_glob))
+        # print('guess_glob=',guess_glob)
+        
     
-    
-    ### Done
-    j0=sx; F_Nx=ex; F_Nt=ey-1    
+    '''  Local guess, Local F => Local solution '''
+    j0=sx; F_Nx=ex; F_Nt=ey    
     if coord2D[1]==0:
         n0=sy
     else:
         n0=sy-1
     F_nbx=F_Nx-j0+1
-    F_nby=F_Nt-n0+1
+    F_nby=F_Nt-n0
+    guess_loc=np.zeros(3*F_nbx*F_nby+2*F_nbx)
+    global_to_local(guess_loc,guess_glob) # Done
+    # if RANK==3:
+    #     print('guess_loc=',guess_loc)
+    
+    ''' Solve with Newton-GMRES solver'''
     # t0 = time.process_time()   ###
-    prec=get_preconditioner(guess)
-    # t1 = time.process_time()   ###
-    # print("Time spent (anal_precond) :",t1-t0)
-        
-    # t0 = time.process_time()   ###
-    solu= newton_krylov(F, guess, method='gmres', verbose=1, inner_M=prec)
-    # print('sol=',sol)
+    solu=get_newton_krylov(guess_glob,guess_loc)
     # t1 = time.process_time()   ###
     # print("Time spent (gmres) :",t1-t0)
     # if RANK==0:
-    #     print(solu)
+    #     print('*****************************')
+    #     print('it=',it)
+    # print(RANK,solu)
         
-    sol_to(solu,rho_new,u_new,V_new)
+        
+    local_sol_to(solu,rho_new,u_new,V_new)
     
     ''' Computation of the global error '''
     r_local_error = global_error(rho, rho_new);
@@ -442,7 +529,8 @@ while (not(convergence) and (it < it_max)):
     convergence = (r_diffnorm < epsilon and u_diffnorm < epsilon and V_diffnorm < epsilon)
     
     ''' Print diffnorm for processor 0 '''
-    if ((RANK == 0) and ((it % 100) == 0)):
+    # if ((RANK == 0) and ((it % 100) == 0)):
+    if RANK == 0:
         print("Iteration", it, " global_error = ", max(r_diffnorm,u_diffnorm,V_diffnorm));
     
         
@@ -451,34 +539,34 @@ t2 = MPI.Wtime()
 
 if (RANK == 0):
     ''' Print convergence time for processor 0 '''
-    print("convergence après:",it, 'l iterations in', t2-t1,'secs')
+    print("convergence après:",it, 'iterations in', t2-t1,'secs')
 
-def final_solution(rho, u, V):  ## Done
+# def final_solution(rho, u, V):  ## Done
     
-    SIZE = (ex-sx+1) * (ey-sy+1)
+#     SIZE = (ex-sx+1) * (ey-sy+1)
     
-    f_rho       = np.zeros(SIZE)
-    f_u       = np.zeros(SIZE)
-    f_V   = np.zeros(SIZE)
+#     f_rho       = np.zeros(SIZE)
+#     f_u       = np.zeros(SIZE)
+#     f_V   = np.zeros(SIZE)
     
-    for i in range(sx, ex+1): # x axis
-        for j in range(sy, ey+1): # y axis
+#     for i in range(sx, ex+1): # x axis
+#         for j in range(sy, ey+1): # y axis
         
-            f_rho[i,j-1]=rho[IDX(i, j)]
-            f_u[i,j-1]=u[IDX(i, j)]
-            f_V[i,j-1]=V[IDX(i, j)]
+#             f_rho[i,j-1]=rho[IDX(i, j)]
+#             f_u[i,j-1]=u[IDX(i, j)]
+#             f_V[i,j-1]=V[IDX(i, j)]
     
-    r_recvbuf = COMM.gather(f_rho, root=0)
-    u_recvbuf = COMM.gather(f_u, root=0)
-    V_recvbuf = COMM.gather(f_V, root=0)
+#     r_recvbuf = COMM.gather(f_rho, root=0)
+#     u_recvbuf = COMM.gather(f_u, root=0)
+#     V_recvbuf = COMM.gather(f_V, root=0)
             
-    return r_recvbuf,u_recvbuf,V_recvbuf
+#     return r_recvbuf,u_recvbuf,V_recvbuf
 
-r_recvbuf,u_recvbuf,V_recvbuf=final_solution(rho_new,u_new,V_new)
-final_solu=np.zeros(3*Nt*Nx+2*Nx)
-solution_to(Nx,Nt,final_solu,r_recvbuf,u_recvbuf,V_recvbuf)
+# r_recvbuf,u_recvbuf,V_recvbuf=final_solution(rho_new,u_new,V_new)
+# final_solu=np.zeros(3*Nt*Nx+2*Nx)
+# solution_to(Nx,Nt,final_solu,r_recvbuf,u_recvbuf,V_recvbuf)
 
-np.savetxt('Sol0_LWR_T3_N1.dat', final_solu)
+# np.savetxt('Sol0_LWR_T3_N1.dat', final_solu)
 
 
 
