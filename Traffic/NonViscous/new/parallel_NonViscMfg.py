@@ -9,6 +9,8 @@ Created on Sat Nov 13 17:44:36 2021
 import numpy as np
 from scipy import integrate
 from scipy.optimize.nonlin import newton_krylov
+from scipy.sparse import csc_matrix
+import scipy.sparse.linalg as spla
 # import time
 from mpi4py import MPI
 
@@ -34,7 +36,7 @@ mu=0.0 # viscosity coefficient
 # Nt_list=[]
 
 """ grid discretization.................................................................................................. """  ## DONE
-Nx=9; Nt=8 # Final spatial-temporal grid  
+Nx=15; Nt=60 # Final spatial-temporal grid  
 dx=L/Nx # spatial step size
 if mu==0.0:
     dt=min(T/Nt,(CFL*dx)/u_max) # temporal step size
@@ -138,7 +140,7 @@ def create_derived_type(sx, ex, sy, ey):
     # block_count : The number of blocks to create.
     # blocklen : The number of (same) elements in each block
     # stride : Distance between the start of each block, expressed in number of elements.
-    type_column = MPI.DOUBLE.Create_vector(ex-sx + 1, 1, ey-sy + 3) # block_count = ex-sx + 1 ; blocklen = 1 ; stride = ey-sy + 3
+    type_column = MPI.DOUBLE.Create_vector(ex-sx + 3, 1, ey-sy + 3) # block_count = ex-sx + 1 ; blocklen = 1 ; stride = ey-sy + 3
     type_column.Commit()
 
     return type_ligne, type_column
@@ -149,21 +151,21 @@ def IDX(i, j):
 def communications(u, sx, ex, sy, ey, type_column, type_ligne):
 
     #[data, count, datatype]
-    ''' Envoyer au voisin N et recevoir du voisin S '''#type_ligne
-    COMM.Send([u[IDX(sx, sy) : ], 1, type_ligne], dest=neighbour[N]) #IDX(sx, sy)XX
-    COMM.Recv([u[IDX(ex+1, sy) : ], 1, type_ligne], source=neighbour[S]) #IDX(ex, sy+1)XX
+    ''' Envoyer au voisin W et recevoir du voisin E '''#type_ligne
+    COMM.Send([u[IDX(sx, sy) : ], 1, type_ligne], dest=neighbour[W]) #IDX(sx, sy)XX
+    COMM.Recv([u[IDX(ex+1, sy) : ], 1, type_ligne], source=neighbour[E]) #IDX(ex, sy+1)XX ,,, IDX(ex+1, sy)
 
-    ''' Envoyer au voisin S et recevoir du voisin N '''#type_ligne
-    COMM.Send([u[IDX(ex, sy) : ], 1, type_ligne], dest=neighbour[S]) #IDX(ex, sy)XX
-    COMM.Recv([u[IDX(sx-1, sy) : ], 1, type_ligne], source=neighbour[N]) #IDX(sx, sy-1)XX
+    ''' Envoyer au voisin E et recevoir du voisin W '''#type_ligne
+    COMM.Send([u[IDX(ex, sy) : ], 1, type_ligne], dest=neighbour[E]) #IDX(ex, sy)XX
+    COMM.Recv([u[IDX(sx-1, sy) : ], 1, type_ligne], source=neighbour[W]) #IDX(sx, sy-1)XX
 
-    ''' Envoyer au voisin W et recevoir du voisin E '''#type_column
-    COMM.Send([u[IDX(sx, sy) : ], 1, type_column], dest=neighbour[W]) #IDX(sx, sy)XX
-    COMM.Recv([u[IDX(sx, ey+1) : ], 1, type_column], source=neighbour[E]) #IDX(sx+1, ey)XX
+    ''' Envoyer au voisin S et recevoir du voisin N '''#type_column
+    COMM.Send([u[IDX(sx-1, sy) : ], 1, type_column], dest=neighbour[S]) #IDX(sx, sy)XX
+    COMM.Recv([u[IDX(sx-1, ey+1) : ], 1, type_column], source=neighbour[N]) #IDX(sx+1, ey)XX
 
     ''' Envoyer au voisin E et recevoir du voisin W ''' #type_column
-    COMM.Send([u[IDX(sx, ey) : ], 1, type_column], dest=neighbour[E]) #IDX(sx, ey)XX
-    COMM.Recv([u[IDX(sx, sy-1) : ], 1, type_column], source=neighbour[W]) #IDX(sx-1, sy)XX
+    COMM.Send([u[IDX(sx-1, ey) : ], 1, type_column], dest=neighbour[N]) #IDX(sx, ey)XX
+    COMM.Recv([u[IDX(sx-1, sy-1) : ], 1, type_column], source=neighbour[S]) #IDX(sx-1, sy)XX ,,,, IDX(sx, sy-1)
     
     return 0
 
@@ -213,6 +215,10 @@ to_solution(Nx,Nt,guess0,rho0,u0,V0)  ## Done
 #     print('rho0=',rho0)
 #     print('u0=',u0)
 #     print('V0=',V0)
+
+f_rho=rho0.copy()
+f_u=u0.copy()
+f_V=V0.copy()
 
 def initialization(rho0, u0, V0, sx, ex, sy, ey):  
     
@@ -415,14 +421,17 @@ def get_newton_krylov(w,wloc):
     # get_preconditioner
     # t0 = time.process_time()   ###
     Jac=jacobian(wloc)
-    prec=np.linalg.inv(Jac)
+    Jac1 = csc_matrix(Jac)
+    J_ilu = spla.spilu(Jac1)
+    M_x = lambda r: J_ilu.solve(r)
+    M = spla.LinearOperator(Jac.shape, M_x)
     # if RANK==0:
     #     print('prec=',prec)
     # t1 = time.process_time()   ###
     # print("Time spent (anal_precond) :",t1-t0)
         
     # t0 = time.process_time()   ###
-    solu= newton_krylov(F, wloc, method='gmres', verbose=1, inner_M=prec)
+    solu= newton_krylov(F, wloc, method='gmres', verbose=0, inner_M=M) # verbose=1
     # print('sol=',solu)
     # t1 = time.process_time()   ###
     # print("Time spent (gmres) :",t1-t0)
@@ -454,8 +463,8 @@ V_new = V.copy()
 ''' Stepping time.......................................................... '''
 it = 0
 convergence = False
-it_max = 100000
-epsilon = 2.e-16
+it_max = 1000
+epsilon = 2.e-10
 
 ''' spend time................................................... '''
 t1 = MPI.Wtime()
@@ -474,9 +483,12 @@ while (not(convergence) and (it < it_max)):
         
     
     ''' Échange des interfaces à la n itération '''
-    communications(rho, sx, ex, sy, ey, type_column, type_ligne)
-    communications(u, sx, ex, sy, ey, type_column, type_ligne)
-    communications(V, sx, ex, sy, ey, type_column, type_ligne)
+    communications(rho, sx, ex, sy, ey, type_column, type_ligne) ## Done
+    communications(u, sx, ex, sy, ey, type_column, type_ligne) ## Done
+    communications(V, sx, ex, sy, ey, type_column, type_ligne) ## Done
+    # if RANK==0:
+    #     print('rho=',rho)
+    # print(RANK,'ru=',u)
      
     '''Calcul de rho_new, u_new et V_new à l’itération n 1 '''
     
@@ -486,7 +498,7 @@ while (not(convergence) and (it < it_max)):
     guess_glob=np.zeros(3*w_nbx*w_nby) ## Done
     to_sol(guess_glob,rho,u,V) ## Done
     # print(RANK,len(guess_glob))
-    # if RANK==3:
+    # if RANK==0:
         # print(w_nbx,w_nby,len(rho),len(u),len(V),len(guess_glob))
         # print('guess_glob=',guess_glob)
         
@@ -516,6 +528,8 @@ while (not(convergence) and (it < it_max)):
         
         
     local_sol_to(solu,rho_new,u_new,V_new)
+    # if RANK==0:
+    #     print('rho_new=',rho_new)
     
     ''' Computation of the global error '''
     r_local_error = global_error(rho, rho_new);
@@ -524,13 +538,15 @@ while (not(convergence) and (it < it_max)):
     u_diffnorm = COMM.allreduce(np.array(u_local_error), op=MPI.MAX )
     V_local_error = global_error(V, V_new);
     V_diffnorm = COMM.allreduce(np.array(V_local_error), op=MPI.MAX )
+    # print(RANK,r_local_error,u_local_error,V_local_error)
        
     ''' Stop if we got the precision of the machine '''
-    convergence = (r_diffnorm < epsilon and u_diffnorm < epsilon and V_diffnorm < epsilon)
+    convergence = max(r_diffnorm,u_diffnorm,V_diffnorm) < epsilon 
+    # if RANK==0:
+    #     print(max(r_diffnorm,u_diffnorm,V_diffnorm),convergence)
     
     ''' Print diffnorm for processor 0 '''
-    # if ((RANK == 0) and ((it % 100) == 0)):
-    if RANK == 0:
+    if ((RANK == 0) and ((it % 100) == 0)):
         print("Iteration", it, " global_error = ", max(r_diffnorm,u_diffnorm,V_diffnorm));
     
         
@@ -540,6 +556,67 @@ t2 = MPI.Wtime()
 if (RANK == 0):
     ''' Print convergence time for processor 0 '''
     print("convergence après:",it, 'iterations in', t2-t1,'secs')
+    
+# print(RANK,f_rho.shape,f_rho)
+r_recvbuf = COMM.gather(rho_new, root=0)
+u_recvbuf = COMM.gather(u_new, root=0)
+V_recvbuf = COMM.gather(V_new, root=0)
+j0_recvbuf=COMM.gather(sx, root=0)
+jf_recvbuf=COMM.gather(ex, root=0)
+n0_recvbuf=COMM.gather(sy, root=0)
+nf_recvbuf=COMM.gather(ey, root=0)
+
+if RANK==0:
+    for rk in range(new_size):
+        ro=r_recvbuf[rk]
+        uu=u_recvbuf[rk]
+        VV=V_recvbuf[rk]
+        for j in range(j0_recvbuf[rk], jf_recvbuf[rk]+1): # x axis
+            for n in range(n0_recvbuf[rk], nf_recvbuf[rk]+1): # y axis
+                f_rho[j,n-1]=ro[IDX(j-j0_recvbuf[rk], n-n0_recvbuf[rk])]
+                f_u[j,n-1]=uu[IDX(j-j0_recvbuf[rk], n-n0_recvbuf[rk])]
+                f_V[j,n-1]=VV[IDX(j-j0_recvbuf[rk], n-n0_recvbuf[rk])]
+
+# if RANK==0:
+#     print(new_size,f_rho)
+        
+# print(RANK,f_rho)
+
+# if RANK==0:
+#     print("rho0=",rho0,"rho=",f_rho)
+
+final_solu=np.zeros(3*Nt*Nx+2*Nx)
+solution_to(Nx,Nt,final_solu,f_rho,f_u,f_V)
+# if RANK==0:
+#     print('final_solu=',final_solu)
+
+np.savetxt('PL_Sol0_LWR_T3_N1.dat', final_solu)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # def final_solution(rho, u, V):  ## Done
     
