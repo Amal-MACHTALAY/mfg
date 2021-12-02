@@ -595,27 +595,12 @@ if RANK==0:
                 f_rho[j,n-1]=ro[IDX2(j-j0_recvbuf[rk]+1, n-n0_recvbuf[rk]+1)]
                 f_u[j,n-1]=uu[IDX2(j-j0_recvbuf[rk]+1, n-n0_recvbuf[rk]+1)]
                 f_V[j,n-1]=VV[IDX2(j-j0_recvbuf[rk]+1, n-n0_recvbuf[rk]+1)]
-
-# if RANK==0:
-#     print('0',r_recvbuf[0].shape,r_recvbuf[0])
-#     print('1',r_recvbuf[1].shape,r_recvbuf[1])
-#     print('2',r_recvbuf[2].shape,r_recvbuf[2])
-#     print('3',r_recvbuf[3].shape,r_recvbuf[3])
-#     print(f_rho.shape,f_rho)
-    # print(f_u.shape,f_u)
-    # print(f_V.shape,f_V)
         
-# print(RANK,f_rho)
-
-# if RANK==0:
-#     print("rho0=",rho0,"rho=",f_rho)
-
-final_solu=np.zeros(3*Nt*Nx+2*Nx)
-solution_to(Nx,Nt,final_solu,f_rho,f_u,f_V)
-if RANK==0:
+    final_solu=np.zeros(3*Nt*Nx+2*Nx)
+    solution_to(Nx,Nt,final_solu,f_rho,f_u,f_V)
     print(Nx,Nt,final_solu.shape)
-
-np.savetxt('PL_Sol0_LWR_T3_N1.dat', final_solu)
+    
+    np.savetxt('PL_Sol0_LWR_T3_N1.dat', final_solu)
 
 
 
