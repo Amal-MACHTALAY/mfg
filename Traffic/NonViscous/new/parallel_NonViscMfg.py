@@ -9,8 +9,8 @@ Created on Sat Nov 13 17:44:36 2021
 import numpy as np
 from scipy import integrate
 from scipy.optimize.nonlin import newton_krylov
-from scipy.sparse import csc_matrix
-import scipy.sparse.linalg as spla
+# from scipy.sparse import csc_matrix
+# import scipy.sparse.linalg as spla
 # import time
 from mpi4py import MPI
 
@@ -163,7 +163,7 @@ def communications(u, sx, ex, sy, ey, type_column, type_ligne):
     COMM.Send([u[IDX(sx-1, sy) : ], 1, type_column], dest=neighbour[S]) #IDX(sx, sy)XX
     COMM.Recv([u[IDX(sx-1, ey+1) : ], 1, type_column], source=neighbour[N]) #IDX(sx+1, ey)XX
 
-    ''' Envoyer au voisin E et recevoir du voisin W ''' #type_column
+    ''' Envoyer au voisin N et recevoir du voisin S ''' #type_column
     COMM.Send([u[IDX(sx-1, ey) : ], 1, type_column], dest=neighbour[N]) #IDX(sx, ey)XX
     COMM.Recv([u[IDX(sx-1, sy-1) : ], 1, type_column], source=neighbour[S]) #IDX(sx-1, sy)XX ,,,, IDX(sx, sy-1)
     
@@ -347,6 +347,8 @@ def Fu_idx_loc(j,n):
 def FV_idx_loc(j,n): 
     return 2*F_nby*F_nbx+(j-j0)*F_nby+(n-n0)
 
+# from scipy.special import logsumexp
+
 def get_newton_krylov(w,wloc):
     
     def F(wloc): 
@@ -404,10 +406,17 @@ def get_newton_krylov(w,wloc):
                     J[Fr_idx_loc(j,n),r_idx_loc(j,n)+F_nby+1]=(0.5*dt/dx)*wloc[u_idx_loc(j+1,n)]-0.5 # F_rho -rho
                     J[Fr_idx_loc(j,n),u_idx_loc(j,n)+F_nby]=(0.5*dt/dx)*wloc[r_idx_loc(j+1,n)] # F_rho - u
                     J[FV_idx_loc(j,n),V_idx_loc(j,n)+(F_nby+1)+1]=eps # F_V - V 
+                if j==F_Nx:
+                    J[Fr_idx_loc(j,n),r_idx_loc(j,n)+F_nby+1]=(0.5*dt/dx)*w[u_idx(j+1,n)]-0.5 # F_rho -rho
+                    J[Fr_idx_loc(j,n),u_idx_loc(j,n)+F_nby]=(0.5*dt/dx)*w[r_idx(j+1,n)] # F_rho - u
                 if j!=j0:
                     J[Fr_idx_loc(j,n),r_idx_loc(j,n)-F_nby-1]=-(0.5*dt/dx)*wloc[u_idx_loc(j-1,n)]-0.5 # F_rho -rho
                     J[Fr_idx_loc(j,n),u_idx_loc(j,n)-F_nby]=-(0.5*dt/dx)*wloc[r_idx_loc(j-1,n)] # F_rho - u
                     J[FV_idx_loc(j,n),V_idx_loc(j,n)+1]=eps # F_V - V
+                if j==j0:
+                    J[Fr_idx_loc(j,n),r_idx_loc(j,n)-F_nby-1]=-(0.5*dt/dx)*w[u_idx(j-1,n)]-0.5 # F_rho -rho
+                    J[Fr_idx_loc(j,n),u_idx_loc(j,n)-F_nby]=-(0.5*dt/dx)*w[r_idx(j-1,n)] # F_rho - u
+                    
                 J[Fu_idx_loc(j,n),u_idx_loc(j,n)]=1 # F_u - u
                 J[FV_idx_loc(j,n),V_idx_loc(j,n)]=-1 # F_V - V
                 J[FV_idx_loc(j,n),V_idx_loc(j,n)+1]=1-2*eps # F_V - V 
@@ -421,17 +430,18 @@ def get_newton_krylov(w,wloc):
     # get_preconditioner
     # t0 = time.process_time()   ###
     Jac=jacobian(wloc)
-    Jac1 = csc_matrix(Jac)
-    J_ilu = spla.spilu(Jac1)
-    M_x = lambda r: J_ilu.solve(r)
-    M = spla.LinearOperator(Jac.shape, M_x)
+    M=np.linalg.inv(Jac)
+    # Jac1 = csc_matrix(Jac)
+    # J_ilu = spla.spilu(Jac1)
+    # M_x = lambda r: J_ilu.solve(r)
+    # M = spla.LinearOperator(Jac.shape, M_x)
     # if RANK==0:
     #     print('prec=',prec)
     # t1 = time.process_time()   ###
     # print("Time spent (anal_precond) :",t1-t0)
         
     # t0 = time.process_time()   ###
-    solu= newton_krylov(F, wloc, method='gmres', verbose=0, inner_M=M) # verbose=1
+    solu= newton_krylov(F, wloc, method='gmres', verbose=0, inner_M=M, x_rtol=2e-12) # verbose=1
     # print('sol=',solu)
     # t1 = time.process_time()   ###
     # print("Time spent (gmres) :",t1-t0)
@@ -445,8 +455,8 @@ def global_error(w, w_new):
    
     local_error = 0
      
-    for i in range(sx, ex+1, 1):
-        for y in range(sy, ey+1, 1):
+    for i in range(sx, ex+1):
+        for y in range(sy, ey+1):
             temp = np.fabs( w[IDX(i, y)] - w_new[IDX(i, y)]  )
             if local_error < temp:
                 local_error = temp;
@@ -460,11 +470,23 @@ rho_new = rho.copy()
 u_new = u.copy() 
 V_new = V.copy()
 
+w_nbx=ex-sx+3 ## Done
+w_nby=ey-sy+3 ## Done
+# guess_glob=np.zeros(3*w_nbx*w_nby) ## Done
+j0=sx; F_Nx=ex; F_Nt=ey    
+if coord2D[1]==0:
+    n0=sy
+else:
+    n0=sy-1
+F_nbx=F_Nx-j0+1
+F_nby=F_Nt-n0
+# guess_loc=np.zeros(3*F_nbx*F_nby+2*F_nbx)
+
 ''' Stepping time.......................................................... '''
 it = 0
 convergence = False
 it_max = 1000
-epsilon = 2.e-10
+epsilon = 2.e-16
 
 ''' spend time................................................... '''
 t1 = MPI.Wtime()
@@ -479,7 +501,7 @@ while (not(convergence) and (it < it_max)):
     V = V_new.copy() 
     rho_new = rho_temp.copy()
     u_new = u_temp.copy()
-    V_new = V_temp.copy()    
+    V_new = V_temp.copy() 
         
     
     ''' Échange des interfaces à la n itération '''
@@ -493,8 +515,6 @@ while (not(convergence) and (it < it_max)):
     '''Calcul de rho_new, u_new et V_new à l’itération n 1 '''
     
     '''  Global guess '''
-    w_nbx=ex-sx+3 ## Done
-    w_nby=ey-sy+3 ## Done
     guess_glob=np.zeros(3*w_nbx*w_nby) ## Done
     to_sol(guess_glob,rho,u,V) ## Done
     # print(RANK,len(guess_glob))
@@ -504,13 +524,6 @@ while (not(convergence) and (it < it_max)):
         
     
     '''  Local guess, Local F => Local solution '''
-    j0=sx; F_Nx=ex; F_Nt=ey    
-    if coord2D[1]==0:
-        n0=sy
-    else:
-        n0=sy-1
-    F_nbx=F_Nx-j0+1
-    F_nby=F_Nt-n0
     guess_loc=np.zeros(3*F_nbx*F_nby+2*F_nbx)
     global_to_local(guess_loc,guess_glob) # Done
     # if RANK==3:
@@ -524,7 +537,6 @@ while (not(convergence) and (it < it_max)):
     # if RANK==0:
     #     print('*****************************')
     #     print('it=',it)
-    # print(RANK,solu)
         
         
     local_sol_to(solu,rho_new,u_new,V_new)
@@ -546,9 +558,9 @@ while (not(convergence) and (it < it_max)):
     #     print(max(r_diffnorm,u_diffnorm,V_diffnorm),convergence)
     
     ''' Print diffnorm for processor 0 '''
-    if ((RANK == 0) and ((it % 100) == 0)):
+    # if ((RANK == 0) and ((it % 100) == 0)):
+    if (RANK == 0):
         print("Iteration", it, " global_error = ", max(r_diffnorm,u_diffnorm,V_diffnorm));
-    
         
 ''' temps écoulé...................................................................... '''
 t2 = MPI.Wtime()
@@ -601,7 +613,7 @@ if RANK==0:
 final_solu=np.zeros(3*Nt*Nx+2*Nx)
 solution_to(Nx,Nt,final_solu,f_rho,f_u,f_V)
 if RANK==0:
-    print(Nx,Nt,final_solu.shape,final_solu)
+    print(Nx,Nt,final_solu.shape)
 
 np.savetxt('PL_Sol0_LWR_T3_N1.dat', final_solu)
 
