@@ -557,6 +557,9 @@ if (RANK == 0):
     ''' Print convergence time for processor 0 '''
     print("convergence après:",it, 'iterations in', t2-t1,'secs')
     
+# if RANK==0:
+#     print(rho_new.shape,rho_new)
+    
 # print(RANK,f_rho.shape,f_rho)
 r_recvbuf = COMM.gather(rho_new, root=0)
 u_recvbuf = COMM.gather(u_new, root=0)
@@ -566,19 +569,29 @@ jf_recvbuf=COMM.gather(ex, root=0)
 n0_recvbuf=COMM.gather(sy, root=0)
 nf_recvbuf=COMM.gather(ey, root=0)
 
+
+
 if RANK==0:
     for rk in range(new_size):
+        def IDX2(i, j): 
+            return ( (i)*(nf_recvbuf[rk]-n0_recvbuf[rk]+3) + (j) )
         ro=r_recvbuf[rk]
         uu=u_recvbuf[rk]
         VV=V_recvbuf[rk]
         for j in range(j0_recvbuf[rk], jf_recvbuf[rk]+1): # x axis
             for n in range(n0_recvbuf[rk], nf_recvbuf[rk]+1): # y axis
-                f_rho[j,n-1]=ro[IDX(j-j0_recvbuf[rk], n-n0_recvbuf[rk])]
-                f_u[j,n-1]=uu[IDX(j-j0_recvbuf[rk], n-n0_recvbuf[rk])]
-                f_V[j,n-1]=VV[IDX(j-j0_recvbuf[rk], n-n0_recvbuf[rk])]
+                f_rho[j,n-1]=ro[IDX2(j-j0_recvbuf[rk]+1, n-n0_recvbuf[rk]+1)]
+                f_u[j,n-1]=uu[IDX2(j-j0_recvbuf[rk]+1, n-n0_recvbuf[rk]+1)]
+                f_V[j,n-1]=VV[IDX2(j-j0_recvbuf[rk]+1, n-n0_recvbuf[rk]+1)]
 
 # if RANK==0:
-#     print(new_size,f_rho)
+#     print('0',r_recvbuf[0].shape,r_recvbuf[0])
+#     print('1',r_recvbuf[1].shape,r_recvbuf[1])
+#     print('2',r_recvbuf[2].shape,r_recvbuf[2])
+#     print('3',r_recvbuf[3].shape,r_recvbuf[3])
+#     print(f_rho.shape,f_rho)
+    # print(f_u.shape,f_u)
+    # print(f_V.shape,f_V)
         
 # print(RANK,f_rho)
 
@@ -587,64 +600,10 @@ if RANK==0:
 
 final_solu=np.zeros(3*Nt*Nx+2*Nx)
 solution_to(Nx,Nt,final_solu,f_rho,f_u,f_V)
-# if RANK==0:
-#     print('final_solu=',final_solu)
+if RANK==0:
+    print(Nx,Nt,final_solu.shape,final_solu)
 
 np.savetxt('PL_Sol0_LWR_T3_N1.dat', final_solu)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# def final_solution(rho, u, V):  ## Done
-    
-#     SIZE = (ex-sx+1) * (ey-sy+1)
-    
-#     f_rho       = np.zeros(SIZE)
-#     f_u       = np.zeros(SIZE)
-#     f_V   = np.zeros(SIZE)
-    
-#     for i in range(sx, ex+1): # x axis
-#         for j in range(sy, ey+1): # y axis
-        
-#             f_rho[i,j-1]=rho[IDX(i, j)]
-#             f_u[i,j-1]=u[IDX(i, j)]
-#             f_V[i,j-1]=V[IDX(i, j)]
-    
-#     r_recvbuf = COMM.gather(f_rho, root=0)
-#     u_recvbuf = COMM.gather(f_u, root=0)
-#     V_recvbuf = COMM.gather(f_V, root=0)
-            
-#     return r_recvbuf,u_recvbuf,V_recvbuf
-
-# r_recvbuf,u_recvbuf,V_recvbuf=final_solution(rho_new,u_new,V_new)
-# final_solu=np.zeros(3*Nt*Nx+2*Nx)
-# solution_to(Nx,Nt,final_solu,r_recvbuf,u_recvbuf,V_recvbuf)
-
-# np.savetxt('Sol0_LWR_T3_N1.dat', final_solu)
-
 
 
 
