@@ -120,44 +120,73 @@ def F(w):
     return FF
 
 
+# def jacobian(w): # Ignoring the forward-backward coupling  parts
+#     J=np.zeros((3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx))
+#     for n in range(0,Nt):
+#         for j in range(1,Nx-1):
+#             J[j*Nt+n,j*(Nt+1)+n+1]=1 # F_rho - rho
+#             J[j*Nt+n,j*(Nt+1)+n+Nt+1]=(0.5*dt/dx)*w[u_idx(j+2,n)]-0.5 # F_rho -rho
+#             J[j*Nt+n,j*(Nt+1)+n-Nt-1]=-(0.5*dt/dx)*w[u_idx(j,n)]-0.5 # F_rho -rho
+#             J[j*Nt+n,(Nt+1)*Nx+j*Nt+n+Nt]=(0.5*dt/dx)*w[r_idx(j+2,n)] # F_rho - u
+#             J[j*Nt+n,(Nt+1)*Nx+j*Nt+n-Nt]=-(0.5*dt/dx)*w[r_idx(j,n)] # F_rho - u
+#             J[Nt*Nx+j*Nt+n,(Nt+1)*Nx+j*Nt+n]=1 # F_u - u
+#             J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n]=-1 # F_V - V
+#             # J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n+1]=1 # F_V - V
+#             J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n+1]=1-2*eps # F_V - V ....
+#             J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n+Nt+2]=eps # F_V - V ....
+#             J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]=eps # F_V - V ....
+            
+#         J[n,n+1]=1 # F_rho - rho
+#         J[(Nx-1)*Nt+n,(Nx-1)*(Nt+1)+n+1]=1 # F_rho - rho
+#         J[n,n+Nt+1]=(0.5*dt/dx)*w[u_idx(2,n)]-0.5 # F_rho - rho
+#         J[(Nx-1)*Nt+n,(Nx-1)*(Nt+1)+n-Nt-1]=-(0.5*dt/dx)*w[u_idx(Nx-1,n)]-0.5 # F_rho - rho
+#         J[n,Nx*Nt+Nx-Nt+n-1]=(0.5*dt/dx)*w[u_idx(Nx,n)]-0.5 # F_rho - rho
+#         J[Nx*Nt-Nt+n,n]=(0.5*dt/dx)*w[u_idx(1,n)]-0.5 # F_rho - rho
+#         J[n,(Nt+1)*Nx+n+Nt]=(0.5*dt/dx)*w[r_idx(2,n)] # F_rho - u
+#         J[(Nx-1)*Nt+n,(Nt+1)*Nx+(Nx-1)*Nt+n-Nt]=-(0.5*dt/dx)*w[r_idx(Nx-1,n)] # F_rho - u
+#         J[n,2*Nt*Nx+Nx-Nt+n]=-(0.5*dt/dx)*w[r_idx(Nx,n)] # F_rho - u
+#         J[Nt*Nx+Nx+n,n]=(0.5*dt/dx)*w[r_idx(1,n)] # F_rho - u
+#         J[Nt*Nx+n,(Nt+1)*Nx+n]=1 # F_u -u
+#         J[Nt*Nx+(Nx-1)*Nt+n,(Nt+1)*Nx+(Nx-1)*Nt+n]=1 # F_u - u
+#         J[2*Nt*Nx+n,(2*Nt+1)*Nx+n]=-1 # F_V - V
+#         # J[2*Nt*Nx+n,(2*Nt+1)*Nx+n+1]=1 # F_V - V ....
+#         J[2*Nt*Nx+n,(2*Nt+1)*Nx+n+1]=1-2*eps  # F_V - V
+#         J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n]=-1 # F_V - V
+#         # J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]=1 # F_V - V 
+#         J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]=1-2*eps # F_V - V ....
+#         J[2*Nt*Nx+n,(2*Nt+1)*Nx+n+Nt+2]=eps # F_V - V ....
+#         J[2*Nt*Nx+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]=eps # F_V - V ....
+#         J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1]=eps # F_V - V ....
+#         J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+n+1]=eps # F_V - V ....
+#     for j in range(0,Nx):
+#         J[3*Nt*Nx+j,(Nt+1)*j]=1 # F_rho_int - rho
+#         J[3*Nt*Nx+Nx+j,(2*Nt+1)*Nx+(Nt+1)*j+Nt]=1 # F_V_ter - V
+    
+#     return J
+
 def jacobian(w): # Ignoring the forward-backward coupling  parts
     J=np.zeros((3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx))
     for n in range(0,Nt):
-        for j in range(1,Nx-1):
+        for j in range(0,Nx):
             J[j*Nt+n,j*(Nt+1)+n+1]=1 # F_rho - rho
-            J[j*Nt+n,j*(Nt+1)+n+Nt+1]=(0.5*dt/dx)*w[u_idx(j+2,n)]-0.5 # F_rho -rho
-            J[j*Nt+n,j*(Nt+1)+n-Nt-1]=-(0.5*dt/dx)*w[u_idx(j,n)]-0.5 # F_rho -rho
-            J[j*Nt+n,(Nt+1)*Nx+j*Nt+n+Nt]=(0.5*dt/dx)*w[r_idx(j+2,n)] # F_rho - u
-            J[j*Nt+n,(Nt+1)*Nx+j*Nt+n-Nt]=-(0.5*dt/dx)*w[r_idx(j,n)] # F_rho - u
             J[Nt*Nx+j*Nt+n,(Nt+1)*Nx+j*Nt+n]=1 # F_u - u
             J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n]=-1 # F_V - V
-            # J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n+1]=1 # F_V - V
-            J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n+1]=1-2*eps # F_V - V ....
-            J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n+Nt+2]=eps # F_V - V ....
-            J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]=eps # F_V - V ....
-            
-        J[n,n+1]=1 # F_rho - rho
-        J[(Nx-1)*Nt+n,(Nx-1)*(Nt+1)+n+1]=1 # F_rho - rho
-        J[n,n+Nt+1]=(0.5*dt/dx)*w[u_idx(2,n)]-0.5 # F_rho - rho
-        J[(Nx-1)*Nt+n,(Nx-1)*(Nt+1)+n-Nt-1]=-(0.5*dt/dx)*w[u_idx(Nx-1,n)]-0.5 # F_rho - rho
+            J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n+1]=1-2*eps # F_V - V
+            if j!=0:
+                J[j*Nt+n,j*(Nt+1)+n-Nt-1]=-(0.5*dt/dx)*w[u_idx(j,n)]-0.5 # F_rho -rho
+                J[j*Nt+n,(Nt+1)*Nx+j*Nt+n-Nt]=-(0.5*dt/dx)*w[r_idx(j,n)] # F_rho - u
+                J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+(j-1)*(Nt+1)+n+1]=eps # F_V - V 
+            if j!=Nx-1:
+                J[j*Nt+n,j*(Nt+1)+n+Nt+1]=(0.5*dt/dx)*w[u_idx(j+2,n)]-0.5 # F_rho -rho
+                J[j*Nt+n,(Nt+1)*Nx+j*Nt+n+Nt]=(0.5*dt/dx)*w[r_idx(j+2,n)] # F_rho - u
+                J[2*Nt*Nx+j*Nt+n,(2*Nt+1)*Nx+j*(Nt+1)+n+Nt+2]=eps # F_V - V 
+         
         J[n,Nx*Nt+Nx-Nt+n-1]=(0.5*dt/dx)*w[u_idx(Nx,n)]-0.5 # F_rho - rho
         J[Nx*Nt-Nt+n,n]=(0.5*dt/dx)*w[u_idx(1,n)]-0.5 # F_rho - rho
-        J[n,(Nt+1)*Nx+n+Nt]=(0.5*dt/dx)*w[r_idx(2,n)] # F_rho - u
-        J[(Nx-1)*Nt+n,(Nt+1)*Nx+(Nx-1)*Nt+n-Nt]=-(0.5*dt/dx)*w[r_idx(Nx-1,n)] # F_rho - u
         J[n,2*Nt*Nx+Nx-Nt+n]=-(0.5*dt/dx)*w[r_idx(Nx,n)] # F_rho - u
         J[Nt*Nx+Nx+n,n]=(0.5*dt/dx)*w[r_idx(1,n)] # F_rho - u
-        J[Nt*Nx+n,(Nt+1)*Nx+n]=1 # F_u -u
-        J[Nt*Nx+(Nx-1)*Nt+n,(Nt+1)*Nx+(Nx-1)*Nt+n]=1 # F_u - u
-        J[2*Nt*Nx+n,(2*Nt+1)*Nx+n]=-1 # F_V - V
-        # J[2*Nt*Nx+n,(2*Nt+1)*Nx+n+1]=1 # F_V - V ....
-        J[2*Nt*Nx+n,(2*Nt+1)*Nx+n+1]=1-2*eps  # F_V - V
-        J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n]=-1 # F_V - V
-        # J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]=1 # F_V - V 
-        J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]=1-2*eps # F_V - V ....
-        J[2*Nt*Nx+n,(2*Nt+1)*Nx+n+Nt+2]=eps # F_V - V ....
-        J[2*Nt*Nx+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]=eps # F_V - V ....
-        J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+(Nx-2)*(Nt+1)+n+1]=eps # F_V - V ....
-        J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+n+1]=eps # F_V - V ....
+        J[2*Nt*Nx+n,(2*Nt+1)*Nx+(Nx-1)*(Nt+1)+n+1]=eps # F_V - V 
+        J[2*Nt*Nx+(Nx-1)*Nt+n,(2*Nt+1)*Nx+n+1]=eps # F_V - V 
     for j in range(0,Nx):
         J[3*Nt*Nx+j,(Nt+1)*j]=1 # F_rho_int - rho
         J[3*Nt*Nx+Nx+j,(2*Nt+1)*Nx+(Nt+1)*j+Nt]=1 # F_V_ter - V
