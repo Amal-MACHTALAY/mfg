@@ -544,23 +544,17 @@ while (not(convergence) and (it < it_max)):
     #     print('rho_new=',rho_new)
     
     ''' Computation of the global error '''
-    r_local_error = global_error(rho, rho_new);
-    r_diffnorm = COMM.allreduce(np.array(r_local_error), op=MPI.MAX )  
-    u_local_error = global_error(u, u_new);
-    u_diffnorm = COMM.allreduce(np.array(u_local_error), op=MPI.MAX )
-    V_local_error = global_error(V, V_new);
-    V_diffnorm = COMM.allreduce(np.array(V_local_error), op=MPI.MAX )
-    # print(RANK,r_local_error,u_local_error,V_local_error)
+    local_error = global_error(guess_loc, sol_loc);
+    diffnorm = COMM.allreduce(np.array(local_error), op=MPI.MAX )  
+#     print(RANK,local_error)
        
     ''' Stop if we got the precision of the machine '''
-    convergence = max(r_diffnorm,u_diffnorm,V_diffnorm) < epsilon 
-    # if RANK==0:
-    #     print(max(r_diffnorm,u_diffnorm,V_diffnorm),convergence)
+    convergence = (diffnorm < epsilon) 
     
     ''' Print diffnorm for processor 0 '''
     # if ((RANK == 0) and ((it % 100) == 0)):
     if (RANK == 0):
-        print("Iteration", it, " global_error = ", max(r_diffnorm,u_diffnorm,V_diffnorm));
+        print("Iteration", it, " global_error = ", diffnorm);
         
 ''' temps écoulé...................................................................... '''
 t2 = MPI.Wtime()
