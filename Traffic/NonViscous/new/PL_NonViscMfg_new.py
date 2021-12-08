@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Dec  8 16:52:00 2021
+Created on Sat Nov 13 17:44:36 2021
 
 @author: amal
 """
@@ -9,9 +9,7 @@ Created on Wed Dec  8 16:52:00 2021
 import numpy as np
 from scipy import integrate
 from scipy.optimize.nonlin import newton_krylov
-from scipy.sparse import csc_matrix
-import scipy.sparse.linalg as spla
-import time
+# import time
 from mpi4py import MPI
 
 COMM = MPI.COMM_WORLD  # The default communicator
@@ -32,11 +30,9 @@ costf="LWR"
 EPS=0.45
 mu=0.0 # viscosity coefficient 
 
-# Nx_list=[]
-# Nt_list=[]
 
 """ grid discretization.................................................................................................. """  ## DONE
-Nx=15; Nt=60 # Final spatial-temporal grid  
+Nx=30; Nt=120 # Final spatial-temporal grid  
 dx=L/Nx # spatial step size
 if mu==0.0:
     dt=min(T/Nt,(CFL*dx)/u_max) # temporal step size
@@ -352,6 +348,8 @@ def FVter_idx_loc(j):
     return 3*F_nby*F_nbx+F_nbx+(j-j0)
 
 # from scipy.special import logsumexp
+# from scipy.sparse import csc_matrix
+# import scipy.sparse.linalg as spla
 
 def get_newton_krylov(w,wloc):
     # np.savetxt('wloc.dat', wloc)
@@ -360,7 +358,6 @@ def get_newton_krylov(w,wloc):
     
     def F(wloc): 
         # FF=[F_rho,F_u,F_V,F_rho_int,F_V_ter]
-        # print(n0,F_Nt,j0,F_Nx)
         FF=np.zeros(3*F_nby*F_nbx+2*F_nbx)
         for n in range(n0,F_Nt):
             for j in range(j0+1,F_Nx):
@@ -384,13 +381,19 @@ def get_newton_krylov(w,wloc):
             FF[Fu_idx_loc(F_Nx,n)]=wloc[u_idx_loc(F_Nx,n)]-f_star_p((wloc[V_idx_loc(F_Nx,n+1)]-wloc[V_idx_loc(F_Nx-1,n+1)])/dx,wloc[r_idx_loc(F_Nx,n)])
             # F_V , F[2*F_nby*F_nbx]->F[3*F_nby*F_nbx-1] ********* 9 
             FF[FV_idx_loc(F_Nx,n)]=wloc[V_idx_loc(F_Nx,n+1)]-wloc[V_idx_loc(F_Nx,n)]+dt*f_star((wloc[V_idx_loc(F_Nx,n+1)]-wloc[V_idx_loc(F_Nx-1,n+1)])/dx,wloc[r_idx_loc(F_Nx,n)])+eps*(w[V_idx(F_Nx+1,n+1)]-2*wloc[V_idx_loc(F_Nx,n+1)]+wloc[V_idx_loc(F_Nx-1,n+1)])
-                            
+                    
         for j in range(j0,F_Nx+1):    
             # F_rho_int , F[3*F_nby*F_nbx]->F[3*F_nby*F_nbx+F_nbx-1] ********** 10
-            FF[Frint_idx_loc(j)]=wloc[r_idx_loc(j,n0)]-(1/dx)*integral(x[j-1],x[j])
+            if n0==sy:
+                FF[Frint_idx_loc(j)]=wloc[r_idx_loc(j,n0)]-(1/dx)*integral(x[j-1],x[j])
+            if n0==sy-1:
+                FF[Frint_idx_loc(j)]=wloc[r_idx_loc(j,n0)]-w[r_idx(j,n0)]
             # F_V_ter , F[3*F_nby*F_nbx+F_nbx]->F[3*F_nby*F_nbx+2*F_nbx-1] ********* 11
-            FF[FVter_idx_loc(j)]=wloc[V_idx_loc(j,F_Nt)]-VT(x[j])
-            
+            if F_Nt==ey:
+                FF[FVter_idx_loc(j)]=wloc[V_idx_loc(j,F_Nt)]-VT(x[j])
+            if F_Nt==ey+1:
+                FF[FVter_idx_loc(j)]=wloc[V_idx_loc(j,F_Nt)]-w[V_idx(j,F_Nt)]
+                
         return FF
     
      
@@ -414,54 +417,32 @@ def get_newton_krylov(w,wloc):
                     J[Fr_idx_loc(j,n),r_idx_loc(j-1,n)]=-(0.5*dt/dx)*wloc[u_idx_loc(j-1,n)]-0.5 # F_rho -rho  ## Ok
                     J[Fr_idx_loc(j,n),u_idx_loc(j-1,n)]=-(0.5*dt/dx)*wloc[r_idx_loc(j-1,n)] # F_rho - u  ## Ok
                     J[FV_idx_loc(j,n),V_idx_loc(j-1,n+1)]=eps # F_V - V  ## Ok
-                # if j==j0:
-                #     J[Fr_idx_loc(j,n),r_idx_loc(j,n)-F_nby-1]=-(0.5*dt/dx)*w[u_idx(j-1,n)]-0.5 # F_rho -rho
-                #     J[Fr_idx_loc(j,n),u_idx_loc(j,n)-F_nby]=-(0.5*dt/dx)*w[r_idx(j-1,n)] # F_rho - u
-                #     J[FV_idx_loc(j,n),V_idx_loc(Nx,n+1)]=eps # F_V - V
                 if j!=F_Nx:
                     J[Fr_idx_loc(j,n),r_idx_loc(j+1,n)]=(0.5*dt/dx)*wloc[u_idx_loc(j+1,n)]-0.5 # F_rho -rho ## Ok
                     J[Fr_idx_loc(j,n),u_idx_loc(j+1,n)]=(0.5*dt/dx)*wloc[r_idx_loc(j+1,n)] # F_rho - u  ## Ok
-                    J[FV_idx_loc(j,n),V_idx_loc(j+1,n+1)]=eps # F_V - V  ## Ok
-                # if j==F_Nx:
-                    # J[Fr_idx_loc(j,n),r_idx_loc(j,n)+F_nby+1]=(0.5*dt/dx)*w[u_idx(j+1,n)]-0.5 # F_rho -rho
-                    # J[Fr_idx_loc(j0,n),r_idx_loc(j,n)-(F_nby+1)]=(0.5*dt/dx)*w[u_idx(j+1,n)]-0.5 # F_rho -rho  
-                    # J[Fr_idx_loc(j,n),n-n0]=(0.5*dt/dx)*w[u_idx(j0,n)]-0.5 # F_rho -rho
-    
-                #     J[Fr_idx_loc(j,n),u_idx_loc(j,n)+F_nby]=(0.5*dt/dx)*w[r_idx(j+1,n)] # F_rho - u
-                
-                    
-                
+                    J[FV_idx_loc(j,n),V_idx_loc(j+1,n+1)]=eps # F_V - V  ## Ok   
             J[Frint_idx_loc(j),r_idx_loc(j,n0)]=1 # F_rho_int - rho ## Ok
             J[FVter_idx_loc(j),V_idx_loc(j,F_Nt)]=1 # F_V_ter - V  ## Ok
         
         return J
     
         
-    # # if RANK==0:
-    # #     print('F(wloc)=',F(wloc))
+    
     # # get_preconditioner
-    # # t0 = time.process_time()   ###
     Jac=jacobian(wloc)
-    # print(Jac)
-    # np.savetxt('jac.dat', Jac)
     M=np.linalg.inv(Jac)
+    
     # Jac1 = csc_matrix(Jac)
     # J_ilu = spla.spilu(Jac1)
     # M_x = lambda r: J_ilu.solve(r)
     # M = spla.LinearOperator(Jac.shape, M_x)
-    # # if RANK==0:
-    # #     print('prec=',prec)
-    # # t1 = time.process_time()   ###
-    # # print("Time spent (anal_precond) :",t1-t0)
         
     # t0 = time.process_time()   ###
-    solu= newton_krylov(F, wloc, method='gmres', verbose=1, inner_M=M) # verbose=1  , x_rtol=2e-12
-    # # print('sol=',solu)
+    solu= newton_krylov(F, wloc, method='gmres', verbose=0, inner_M=M, x_rtol=2e-12) # verbose=1  , x_rtol=2e-12
     # t1 = time.process_time()   ###
     # print("Time spent (gmres) :",t1-t0)
     
     return solu
-    # return 0
     
 
 ''' Calcul of global erreur............................................................................................. '''
@@ -485,28 +466,25 @@ V_new = V.copy()
 
 w_nbx=ex-sx+3 ## Done
 w_nby=ey-sy+3 ## Done
-guess_glob=np.zeros(3*w_nbx*w_nby) ## Done
-j0=sx; F_Nx=ex; F_Nt=ey  
-# print('coord2D=',coord2D)
-# print(sy)
+# guess_glob=np.zeros(3*w_nbx*w_nby) ## Done
+j0=sx; F_Nx=ex  
 if coord2D[1]==0:
     n0=sy
 else:
     n0=sy-1
-# print('n0=',n0)
-# if coord2D[0]==pt:
-#     F_Nt=ey
-# else:
-#     F_Nt=ey+1
+if coord2D[1]==pt:
+    F_Nt=ey
+else:
+    F_Nt=ey+1
 F_nbx=F_Nx-j0+1
 F_nby=F_Nt-n0
-guess_loc=np.zeros(3*F_nbx*F_nby+2*F_nbx)
+# guess_loc=np.zeros(3*F_nbx*F_nby+2*F_nbx)
 
 
 ''' Stepping time.......................................................... '''
 it = 0
 convergence = False
-it_max = 100
+it_max = 1000
 epsilon = 2.e-16
 
 ''' spend time................................................... '''
@@ -555,12 +533,6 @@ while (not(convergence) and (it < it_max)):
     ''' Solve with Newton-GMRES solver'''
     # t0 = time.process_time()   ###
     sol_loc=get_newton_krylov(guess_glob,guess_loc)
-    # prec=get_preconditioner(guess_loc)
-    # t1 = time.process_time()   ###
-    # print("Time spent (anal_precond) :",t1-t0)
-    # t0 = time.process_time()   ###
-    # sol_loc = newton_krylov(F, guess_loc, method='gmres', verbose=1, inner_M=prec)
-    # print(RANK,sol_loc)
     # t1 = time.process_time()   ###
     # print("Time spent (gmres) :",t1-t0)
         
@@ -572,7 +544,7 @@ while (not(convergence) and (it < it_max)):
     ''' Computation of the global error '''
     local_error = global_error(guess_loc, sol_loc);
     diffnorm = COMM.allreduce(np.array(local_error), op=MPI.MAX )  
-    print(RANK,local_error)
+    # print(RANK,local_error)
        
     ''' Stop if we got the precision of the machine '''
     convergence = (diffnorm < epsilon) 
@@ -618,23 +590,11 @@ if RANK==0:
         
     final_solu=np.zeros(3*Nt*Nx+2*Nx)
     solution_to(Nx,Nt,final_solu,f_rho,f_u,f_V)
-    print(Nx,Nt,final_solu.shape)
+    # print(Nx,Nt,final_solu.shape)
     
     np.savetxt('PL_Sol0_LWR_T3_N1.dat', final_solu)
 
-# if RANK==0:
-#     print('0',r_recvbuf[0].shape,r_recvbuf[0])
-#     print('1',r_recvbuf[1].shape,r_recvbuf[1])
-#     print('2',r_recvbuf[2].shape,r_recvbuf[2])
-#     print('3',r_recvbuf[3].shape,r_recvbuf[3])
-#     print(f_rho.shape,f_rho)
-    # print(f_u.shape,f_u)
-    # print(f_V.shape,f_V)
-        
-# print(RANK,f_rho)
 
-# if RANK==0:
-#     print("rho0=",rho0,"rho=",f_rho)
 
 
 
