@@ -11,6 +11,7 @@ from scipy import integrate
 from scipy.optimize.nonlin import newton_krylov
 # import time
 from mpi4py import MPI
+from numba import njit
 
 COMM = MPI.COMM_WORLD  # The default communicator
 SIZE = COMM.Get_size() # The number of processes
@@ -25,14 +26,21 @@ L=N # road length
 CFL=0.75    # CFL<1
 rho_a=0.05; rho_b=0.95; gama=0.1
 # rho_a=0.2; rho_b=0.8; gama=0.15*L
-costf="LWR"
+# costf="LWR"
 # """ Viscous solution"""
 EPS=0.45
-mu=0.0 # viscosity coefficient 
-
-
+# viscosity coefficient
+mu=0.0 # LWR
+# mu=0.045 # Sep
+# mu=0.03 # NonSep
 """ grid discretization.................................................................................................. """  ## DONE
-Nx=30; Nt=120 # Final spatial-temporal grid  
+Nx=15; Nt=60 # Final spatial-temporal grid  
+# Nx=30; Nt=120
+# Nx=60; Nt=240
+# Nx=120; Nt=480
+# Nx=240; Nt=960
+# Nx=480; Nt=1920 
+
 dx=L/Nx # spatial step size
 if mu==0.0:
     dt=min(T/Nt,(CFL*dx)/u_max) # temporal step size
@@ -49,8 +57,24 @@ if RANK==0:
     print('dx={dx}, dt={dt}'.format(dx=round(dx,4),dt=round(dt,4)))
     
 guess0 = np.zeros(3*Nt*Nx+2*Nx) ## Done
-# guess0 = np.arange(0,3*Nt*Nx+2*Nx,1)
-# guess0=np.loadtxt('Sol0_LWR_T3_N1.dat')
+########## LWR
+# guess0=np.loadtxt('plots/lwr/PL_njit_Guess1_LWR_T3_N1.dat')
+# guess0=np.loadtxt('plots/lwr/PL_njit_Guess2_LWR_T3_N1.dat')
+# guess0=np.loadtxt('plots/lwr/PL_njit_Guess3_LWR_T3_N1.dat')
+# guess0=np.loadtxt('plots/lwr/PL_njit_Guess4_LWR_T3_N1.dat')
+# guess0=np.loadtxt('plots/lwr/PL_njit_Guess5_LWR_T3_N1.dat')
+########## Separable
+# guess0=np.loadtxt('plots/sep/PL_njit_Guess1_Sep_T3_N1.dat')
+# guess0=np.loadtxt('plots/sep/PL_njit_Guess2_Sep_T3_N1.dat')
+# guess0=np.loadtxt('plots/sep/PL_njit_Guess3_Sep_T3_N1.dat')
+# guess0=np.loadtxt('plots/sep/PL_njit_Guess4_Sep_T3_N1.dat')
+# guess0=np.loadtxt('plots/sep/PL_njit_Guess5_Sep_T3_N1.dat')
+########## Non-Separable
+# guess0=np.loadtxt('plots/nonsep/PL_njit_Guess1_NonSep_T3_N1.dat')
+# guess0=np.loadtxt('plots/nonsep/PL_njit_Guess2_NonSep_T3_N1.dat')
+# guess0=np.loadtxt('plots/nonsep/PL_njit_Guess3_NonSep_T3_N1.dat')
+# guess0=np.loadtxt('plots/nonsep/PL_njit_Guess4_NonSep_T3_N1.dat')
+# guess0=np.loadtxt('plots/nonsep/PL_njit_Guess5_NonSep_T3_N1.dat')
 """ for MPI : Creates a division of processors in a cartesian grid.................................................... """ ## DONE
 nbr_x=Nx+1; nbr_t=Nt+1 # spatial-temporal grid sizes 
 nx=nbr_x-1; nt=nbr_t # number of points for MPI
@@ -139,6 +163,7 @@ def create_derived_type(sx, ex, sy, ey):
 
     return type_ligne, type_column
 
+@njit(fastmath=True)
 def IDX(i, j): 
         return ( ((i)-(sx-1))*(ey-sy+3) + (j)-(sy-1) )
 
@@ -171,15 +196,16 @@ type_ligne, type_column = create_derived_type(sx, ex, sy, ey) ## Done
 
 """ Initialization................................................................................................ """ ## DONE
 
+@njit(fastmath=True)
 def r_id(j,n): ## Done
     return (j-1)*(Nt+1)+n
-
+@njit(fastmath=True)
 def u_id(j,n): ## Done
     return (Nt+1)*Nx+(j-1)*Nt+n
-
+@njit(fastmath=True)
 def V_id(j,n): ## Done
     return (2*Nt+1)*Nx+(j-1)*(Nt+1)+n
-
+@njit(fastmath=True)
 def to_solution(Nx,Nt,sol,rho,u,V): 
     for j in range(1,Nx+1):
         for n in range(0,Nt):
@@ -189,7 +215,7 @@ def to_solution(Nx,Nt,sol,rho,u,V):
         rho[j,Nt]=sol[r_id(j,Nt)]
         V[j,Nt]=sol[V_id(j,Nt)]
     return 0
-
+@njit(fastmath=True)
 def solution_to(Nx,Nt,sol,rho,u,V): 
     for j in range(1,Nx+1):
         for n in range(0,Nt):
@@ -213,7 +239,7 @@ to_solution(Nx,Nt,guess0,rho0,u0,V0)  ## Done
 f_rho=rho0.copy()
 f_u=u0.copy()
 f_V=V0.copy()
-
+@njit(fastmath=True)
 def initialization(rho0, u0, V0, sx, ex, sy, ey):  
     
     SIZE = (ex-sx+3) * (ey-sy+3)
@@ -240,16 +266,16 @@ rho, u, V = initialization(rho0, u0, V0, sx, ex, sy, ey) ## Done
 #     print('rho=',rho)
 #     print('u=',u)
 #     print('V=',V)
-    
+@njit(fastmath=True)    
 def r_idx(j,n): 
     return (j-(sx-1))*w_nby+(n-(sy-1))
-
+@njit(fastmath=True)
 def u_idx(j,n): 
     return w_nby*w_nbx+(j-(sx-1))*w_nby+(n-(sy-1))
-
+@njit(fastmath=True)
 def V_idx(j,n): 
     return 2*w_nby*w_nbx+(j-(sx-1))*w_nby+(n-(sy-1))
-    
+@njit(fastmath=True)    
 def to_sol(sol,rho,u,V): 
     for j in range(sx-1,ex+2):
         for n in range(sy-1,ey+2):
@@ -257,7 +283,7 @@ def to_sol(sol,rho,u,V):
             sol[u_idx(j,n)]=u[IDX(j,n)]
             sol[V_idx(j,n)]=V[IDX(j,n)]
     return 0
-
+@njit(fastmath=True)
 def sol_to(sol,rho,u,V): 
     for j in range(sx-1,ex+2):
         for n in range(sy-1,ey+2):
@@ -265,16 +291,16 @@ def sol_to(sol,rho,u,V):
             u[IDX(j,n)]=sol[u_idx(j,n)]
             V[IDX(j,n)]=sol[V_idx(j,n)]
     return 0
-
+@njit(fastmath=True)
 def r_idx_loc(j,n): 
         return (j-j0)*(F_nby+1)+(n-n0)
-
+@njit(fastmath=True)
 def u_idx_loc(j,n): 
     return (F_nby+1)*F_nbx+(j-j0)*F_nby+(n-n0)
-
+@njit(fastmath=True)
 def V_idx_loc(j,n): 
     return 2*F_nby*F_nbx+F_nbx+(j-j0)*(F_nby+1)+(n-n0)
-
+@njit(fastmath=True)
 def global_to_local(local_sol,global_sol):  ### Done
     for j in range(j0,F_Nx+1):
         for n in range(n0,F_Nt+1):
@@ -283,7 +309,7 @@ def global_to_local(local_sol,global_sol):  ### Done
                 local_sol[u_idx_loc(j,n)]=global_sol[u_idx(j,n)]
             local_sol[V_idx_loc(j,n)]=global_sol[V_idx(j,n)]
     return 0
-
+@njit(fastmath=True)
 def local_sol_to(sol,rho,u,V):  ###?
         for j in range(j0,F_Nx+1):
             for n in range(n0,F_Nt+1):
@@ -294,158 +320,175 @@ def local_sol_to(sol,rho,u,V):  ###?
         return 0
     
 ''' MFG functions....................................................................................................... ''' ## DONE
+@njit(fastmath=True)
 def U(rho): # Greenshields desired speed
     return u_max*(1-rho/rho_jam)
-
-def f_mfg(u,r):
-    if costf=="LWR":
-        return 0.5*((U(r)-u)**2) # MFG-LWR
-    elif costf=="Sep":
-        return 0.5*((u/u_max)**2)-(u/u_max)+(r/rho_jam) # MFG-Separable
-    elif costf=="NonSep":
-        return 0.5*((u/u_max)**2)-(u/u_max)+((u*r)/(u_max*rho_jam)) # MFG-NonSeparable
-
-def f_star_p(p,r): # 0<=u<=u_max
-    if costf=="LWR":
-        return U(r)-p # MFG-LWR
-    elif costf=="Sep":
-        return max(min(u_max*(1-p*u_max),u_max),0) # MFG-Separable
-    elif costf=="NonSep":
-        return max(min(u_max*(1-r/rho_jam-u_max*p),u_max),0) # MFG-NonSeparable
-    
-def f_star(p,r): # p=Vx
-    if costf=="LWR":
-        return -0.5*(p**2)+U(r)*p # MFG-LWR
-    elif costf=="Sep":
-        return f_star_p(p,r)*p+f_mfg(f_star_p(p,r),r) # MFG-Separable
-    elif costf=="NonSep":
-        return f_star_p(p,r)*p+f_mfg(f_star_p(p,r),r) # MFG-NonSeparable
+@njit(fastmath=True)
+def f_mfg_LWR(u,r):
+    return 0.5*((U(r)-u)**2) # MFG-LWR
+@njit(fastmath=True)
+def f_mfg_Sep(u,r):
+    return 0.5*((u/u_max)**2)-(u/u_max)+(r/rho_jam) # MFG-Separable
+@njit(fastmath=True)
+def f_mfg_NonSep(u,r):
+    return 0.5*((u/u_max)**2)-(u/u_max)+((u*r)/(u_max*rho_jam)) # MFG-NonSeparable
+@njit(fastmath=True)
+def f_star_p_LWR(p,r): # 0<=u<=u_max
+    return U(r)-p # MFG-LWR
+@njit(fastmath=True)
+def f_star_p_Sep(p,r): # 0<=u<=u_max
+    return max(min(u_max*(1-p*u_max),u_max),0) # MFG-Separable
+@njit(fastmath=True)    
+def f_star_p_NonSep(p,r): # 0<=u<=u_max
+    return max(min(u_max*(1-r/rho_jam-u_max*p),u_max),0) # MFG-NonSeparable
+@njit(fastmath=True)    
+def f_star_LWR(p,r): # p=Vx
+    return -0.5*(p**2)+U(r)*p # MFG-LWR
+@njit(fastmath=True)    
+def f_star_Sep(p,r): # p=Vx
+    return f_star_p_Sep(p,r)*p+f_mfg_Sep(f_star_p_Sep(p,r),r) # MFG-Separable
+@njit(fastmath=True)    
+def f_star_NonSep(p,r): # p=Vx
+    return f_star_p_NonSep(p,r)*p+f_mfg_NonSep(f_star_p_NonSep(p,r),r) # MFG-NonSeparable
 
 def integral(a,b): 
     x2 = lambda x: rho_int(x)
     I=integrate.quad(x2, a, b)
     return I[0]
 
+@njit(fastmath=True)
 def rho_int(s): # initial density
     return rho_a+(rho_b-rho_a)*np.exp(-0.5*((s-0.5*L)/gama)**2) # 0<=rho<=rho_jam
-
+@njit(fastmath=True)
 def VT(a): # Terminal cost
     return 0.0
-
+@njit(fastmath=True)
 def Fr_idx_loc(j,n): 
         return (j-j0)*F_nby+(n-n0)
-
+@njit(fastmath=True)
 def Fu_idx_loc(j,n): 
     return F_nby*F_nbx+(j-j0)*F_nby+(n-n0)
-
+@njit(fastmath=True)
 def FV_idx_loc(j,n): 
     return 2*F_nby*F_nbx+(j-j0)*F_nby+(n-n0)
-
+@njit(fastmath=True)
 def Frint_idx_loc(j):
     return 3*F_nby*F_nbx+(j-j0)
-
+@njit(fastmath=True)
 def FVter_idx_loc(j):
     return 3*F_nby*F_nbx+F_nbx+(j-j0)
-
-# from scipy.special import logsumexp
-# from scipy.sparse import csc_matrix
-# import scipy.sparse.linalg as spla
-
-def get_newton_krylov(w,wloc):
-    # np.savetxt('wloc.dat', wloc)
-    # np.savetxt('w.dat', w)
+# @njit(fastmath=True)
+def F(wloc,w,f_star_p,f_star): 
+    # FF=[F_rho,F_u,F_V,F_rho_int,F_V_ter]
+    FF=np.zeros(3*F_nby*F_nbx+2*F_nbx)
+    for n in range(n0,F_Nt):
+        for j in range(j0+1,F_Nx):
+            # F_rho , F[0]->F[F_nby*F_nbx-1] ************ 2 
+            FF[Fr_idx_loc(j,n)]=wloc[r_idx_loc(j,n+1)]-0.5*(wloc[r_idx_loc(j-1,n)]+wloc[r_idx_loc(j+1,n)])\
+                +(0.5*dt/dx)*(wloc[r_idx_loc(j+1,n)]*wloc[u_idx_loc(j+1,n)]-wloc[r_idx_loc(j-1,n)]*wloc[u_idx_loc(j-1,n)])
+            # F_u , F[F_nby*F_nbx]->F[2*F_nby*F_nbx-1] *********** 5
+            FF[Fu_idx_loc(j,n)]=wloc[u_idx_loc(j,n)]-f_star_p((wloc[V_idx_loc(j,n+1)]-wloc[V_idx_loc(j-1,n+1)])/dx,wloc[r_idx_loc(j,n)])
+            # F_V , F[2*F_nby*F_nbx]->F[3*F_nby*F_nbx-1] ********* 8 
+            FF[FV_idx_loc(j,n)]=wloc[V_idx_loc(j,n+1)]-wloc[V_idx_loc(j,n)]\
+                +dt*f_star((wloc[V_idx_loc(j,n+1)]-wloc[V_idx_loc(j-1,n+1)])/dx,wloc[r_idx_loc(j,n)])\
+                    +eps*(wloc[V_idx_loc(j+1,n+1)]-2*wloc[V_idx_loc(j,n+1)]+wloc[V_idx_loc(j-1,n+1)])
     
+        # F_rho , F[0]->F[F_nby*F_nbx-1] ************ 1 
+        FF[Fr_idx_loc(j0,n)]=wloc[r_idx_loc(j0,n+1)]-0.5*(w[r_idx(j0-1,n)]+wloc[r_idx_loc(j0+1,n)])\
+            +(0.5*dt/dx)*(wloc[r_idx_loc(j0+1,n)]*wloc[u_idx_loc(j0+1,n)]-w[r_idx(j0-1,n)]*w[u_idx(j0-1,n)])
+        # F_u , F[F_nby*F_nbx]->F[2*F_nby*F_nbx-1] *********** 4 
+        FF[Fu_idx_loc(j0,n)]=wloc[u_idx_loc(j0,n)]-f_star_p((wloc[V_idx_loc(j0,n+1)]-w[V_idx(j0-1,n+1)])/dx,wloc[r_idx_loc(j0,n)])
+        # F_V , F[2*F_nby*F_nbx]->F[3*F_nby*F_nbx-1] ********* 7 
+        FF[FV_idx_loc(j0,n)]=wloc[V_idx_loc(j0,n+1)]-wloc[V_idx_loc(j0,n)]\
+            +dt*f_star((wloc[V_idx_loc(j0,n+1)]-w[V_idx(j0-1,n+1)])/dx,wloc[r_idx_loc(j0,n)])\
+                +eps*(wloc[V_idx_loc(j0+1,n+1)]-2*wloc[V_idx_loc(j0,n+1)]+w[V_idx(j0-1,n+1)])
     
-    def F(wloc): 
-        # FF=[F_rho,F_u,F_V,F_rho_int,F_V_ter]
-        FF=np.zeros(3*F_nby*F_nbx+2*F_nbx)
-        for n in range(n0,F_Nt):
-            for j in range(j0+1,F_Nx):
-                # F_rho , F[0]->F[F_nby*F_nbx-1] ************ 2 
-                FF[Fr_idx_loc(j,n)]=wloc[r_idx_loc(j,n+1)]-0.5*(wloc[r_idx_loc(j-1,n)]+wloc[r_idx_loc(j+1,n)])+(0.5*dt/dx)*(wloc[r_idx_loc(j+1,n)]*wloc[u_idx_loc(j+1,n)]-wloc[r_idx_loc(j-1,n)]*wloc[u_idx_loc(j-1,n)])
-                # F_u , F[F_nby*F_nbx]->F[2*F_nby*F_nbx-1] *********** 5
-                FF[Fu_idx_loc(j,n)]=wloc[u_idx_loc(j,n)]-f_star_p((wloc[V_idx_loc(j,n+1)]-wloc[V_idx_loc(j-1,n+1)])/dx,wloc[r_idx_loc(j,n)])
-                # F_V , F[2*F_nby*F_nbx]->F[3*F_nby*F_nbx-1] ********* 8 
-                FF[FV_idx_loc(j,n)]=wloc[V_idx_loc(j,n+1)]-wloc[V_idx_loc(j,n)]+dt*f_star((wloc[V_idx_loc(j,n+1)]-wloc[V_idx_loc(j-1,n+1)])/dx,wloc[r_idx_loc(j,n)])+eps*(wloc[V_idx_loc(j+1,n+1)]-2*wloc[V_idx_loc(j,n+1)]+wloc[V_idx_loc(j-1,n+1)])
-        
-            # F_rho , F[0]->F[F_nby*F_nbx-1] ************ 1 
-            FF[Fr_idx_loc(j0,n)]=wloc[r_idx_loc(j0,n+1)]-0.5*(w[r_idx(j0-1,n)]+wloc[r_idx_loc(j0+1,n)])+(0.5*dt/dx)*(wloc[r_idx_loc(j0+1,n)]*wloc[u_idx_loc(j0+1,n)]-w[r_idx(j0-1,n)]*w[u_idx(j0-1,n)])
-            # F_u , F[F_nby*F_nbx]->F[2*F_nby*F_nbx-1] *********** 4 
-            FF[Fu_idx_loc(j0,n)]=wloc[u_idx_loc(j0,n)]-f_star_p((wloc[V_idx_loc(j0,n+1)]-w[V_idx(j0-1,n+1)])/dx,wloc[r_idx_loc(j0,n)])
-            # F_V , F[2*F_nby*F_nbx]->F[3*F_nby*F_nbx-1] ********* 7 
-            FF[FV_idx_loc(j0,n)]=wloc[V_idx_loc(j0,n+1)]-wloc[V_idx_loc(j0,n)]+dt*f_star((wloc[V_idx_loc(j0,n+1)]-w[V_idx(j0-1,n+1)])/dx,wloc[r_idx_loc(j0,n)])+eps*(wloc[V_idx_loc(j0+1,n+1)]-2*wloc[V_idx_loc(j0,n+1)]+w[V_idx(j0-1,n+1)])
-        
-            # F_rho , F[0]->F[F_nby*F_nbx-1] ************ 3 
-            FF[Fr_idx_loc(F_Nx,n)]=wloc[r_idx_loc(F_Nx,n+1)]-0.5*(wloc[r_idx_loc(F_Nx-1,n)]+w[r_idx(F_Nx+1,n)])+(0.5*dt/dx)*(w[r_idx(F_Nx+1,n)]*w[u_idx(F_Nx+1,n)]-wloc[r_idx_loc(F_Nx-1,n)]*wloc[u_idx_loc(F_Nx-1,n)])
-            # F_u , F[F_nby*F_nbx]->F[2*F_nby*F_nbx-1] *********** 6 
-            FF[Fu_idx_loc(F_Nx,n)]=wloc[u_idx_loc(F_Nx,n)]-f_star_p((wloc[V_idx_loc(F_Nx,n+1)]-wloc[V_idx_loc(F_Nx-1,n+1)])/dx,wloc[r_idx_loc(F_Nx,n)])
-            # F_V , F[2*F_nby*F_nbx]->F[3*F_nby*F_nbx-1] ********* 9 
-            FF[FV_idx_loc(F_Nx,n)]=wloc[V_idx_loc(F_Nx,n+1)]-wloc[V_idx_loc(F_Nx,n)]+dt*f_star((wloc[V_idx_loc(F_Nx,n+1)]-wloc[V_idx_loc(F_Nx-1,n+1)])/dx,wloc[r_idx_loc(F_Nx,n)])+eps*(w[V_idx(F_Nx+1,n+1)]-2*wloc[V_idx_loc(F_Nx,n+1)]+wloc[V_idx_loc(F_Nx-1,n+1)])
-                    
-        for j in range(j0,F_Nx+1):    
-            # F_rho_int , F[3*F_nby*F_nbx]->F[3*F_nby*F_nbx+F_nbx-1] ********** 10
-            if n0==sy:
-                FF[Frint_idx_loc(j)]=wloc[r_idx_loc(j,n0)]-(1/dx)*integral(x[j-1],x[j])
-            if n0==sy-1:
-                FF[Frint_idx_loc(j)]=wloc[r_idx_loc(j,n0)]-w[r_idx(j,n0)]
-            # F_V_ter , F[3*F_nby*F_nbx+F_nbx]->F[3*F_nby*F_nbx+2*F_nbx-1] ********* 11
-            if F_Nt==ey:
-                FF[FVter_idx_loc(j)]=wloc[V_idx_loc(j,F_Nt)]-VT(x[j])
-            if F_Nt==ey+1:
-                FF[FVter_idx_loc(j)]=wloc[V_idx_loc(j,F_Nt)]-w[V_idx(j,F_Nt)]
+        # F_rho , F[0]->F[F_nby*F_nbx-1] ************ 3 
+        FF[Fr_idx_loc(F_Nx,n)]=wloc[r_idx_loc(F_Nx,n+1)]-0.5*(wloc[r_idx_loc(F_Nx-1,n)]+w[r_idx(F_Nx+1,n)])\
+            +(0.5*dt/dx)*(w[r_idx(F_Nx+1,n)]*w[u_idx(F_Nx+1,n)]-wloc[r_idx_loc(F_Nx-1,n)]*wloc[u_idx_loc(F_Nx-1,n)])
+        # F_u , F[F_nby*F_nbx]->F[2*F_nby*F_nbx-1] *********** 6 
+        FF[Fu_idx_loc(F_Nx,n)]=wloc[u_idx_loc(F_Nx,n)]-f_star_p((wloc[V_idx_loc(F_Nx,n+1)]-wloc[V_idx_loc(F_Nx-1,n+1)])/dx,wloc[r_idx_loc(F_Nx,n)])
+        # F_V , F[2*F_nby*F_nbx]->F[3*F_nby*F_nbx-1] ********* 9 
+        FF[FV_idx_loc(F_Nx,n)]=wloc[V_idx_loc(F_Nx,n+1)]-wloc[V_idx_loc(F_Nx,n)]\
+            +dt*f_star((wloc[V_idx_loc(F_Nx,n+1)]-wloc[V_idx_loc(F_Nx-1,n+1)])/dx,wloc[r_idx_loc(F_Nx,n)])\
+                +eps*(w[V_idx(F_Nx+1,n+1)]-2*wloc[V_idx_loc(F_Nx,n+1)]+wloc[V_idx_loc(F_Nx-1,n+1)])
                 
-        return FF
+    for j in range(j0,F_Nx+1):    
+        # F_rho_int , F[3*F_nby*F_nbx]->F[3*F_nby*F_nbx+F_nbx-1] ********** 10
+        if n0==sy:
+            FF[Frint_idx_loc(j)]=wloc[r_idx_loc(j,n0)]-(1/dx)*integral(x[j-1],x[j])
+        if n0==sy-1:
+            FF[Frint_idx_loc(j)]=wloc[r_idx_loc(j,n0)]-w[r_idx(j,n0)]
+        # F_V_ter , F[3*F_nby*F_nbx+F_nbx]->F[3*F_nby*F_nbx+2*F_nbx-1] ********* 11
+        if F_Nt==ey:
+            FF[FVter_idx_loc(j)]=wloc[V_idx_loc(j,F_Nt)]-VT(x[j])
+        if F_Nt==ey+1:
+            FF[FVter_idx_loc(j)]=wloc[V_idx_loc(j,F_Nt)]-w[V_idx(j,F_Nt)]
+            
+    return FF
     
      
-    # t0 = time.process_time()   ###
-    # Pl_F_guess=F(wloc)
-    # t1 = time.process_time()   ###
-    # print("Time spent :",t1-t0)
-    # np.savetxt('Pl_F_guess.dat', Pl_F_guess)
+# t0 = time.process_time()   ###
+# Pl_F_guess=F(wloc)
+# t1 = time.process_time()   ###
+# print("Time spent :",t1-t0)
+# np.savetxt('Pl_F_guess.dat', Pl_F_guess)
+@njit(fastmath=True)    
+def jacobian(wloc): # Ignoring the forward-backward coupling  parts 
+    # print(wloc)
+    # J=np.zeros((3*F_nby*F_nbx+2*F_nbx,3*F_nby*F_nbx+2*F_nbx))
+    row = []; col = []; data = []
+    for j in range(j0,F_Nx+1):
+        for n in range(n0,F_Nt):
+            # J[Fr_idx_loc(j,n),r_idx_loc(j,n+1)]=1 # F_rho - rho ## Ok
+            row.append(Fr_idx_loc(j,n)); col.append(r_idx_loc(j,n+1)); data.append(1)
+            # J[Fu_idx_loc(j,n),u_idx_loc(j,n)]=1 # F_u - u  ## Ok
+            row.append(Fu_idx_loc(j,n)); col.append(u_idx_loc(j,n)); data.append(1)
+            # J[FV_idx_loc(j,n),V_idx_loc(j,n)]=-1 # F_V - V## Ok
+            row.append(FV_idx_loc(j,n)); col.append(V_idx_loc(j,n)); data.append(-1)
+            # J[FV_idx_loc(j,n),V_idx_loc(j,n+1)]=1-2*eps # F_V - V  ## Ok
+            row.append(FV_idx_loc(j,n)); col.append(V_idx_loc(j,n+1)); data.append(1-2*eps)
+            
+            if j!=j0:
+                # J[Fr_idx_loc(j,n),r_idx_loc(j-1,n)]=-(0.5*dt/dx)*wloc[u_idx_loc(j-1,n)]-0.5 # F_rho -rho  ## Ok
+                row.append(Fr_idx_loc(j,n)); col.append(r_idx_loc(j-1,n)); data.append(-(0.5*dt/dx)*wloc[u_idx_loc(j-1,n)]-0.5)
+                # J[Fr_idx_loc(j,n),u_idx_loc(j-1,n)]=-(0.5*dt/dx)*wloc[r_idx_loc(j-1,n)] # F_rho - u  ## Ok
+                row.append(Fr_idx_loc(j,n)); col.append(u_idx_loc(j-1,n)); data.append(-(0.5*dt/dx)*wloc[r_idx_loc(j-1,n)])
+                # J[FV_idx_loc(j,n),V_idx_loc(j-1,n+1)]=eps # F_V - V  ## Ok
+                row.append(FV_idx_loc(j,n)); col.append(V_idx_loc(j-1,n+1)); data.append(eps)
+            if j!=F_Nx:
+                # J[Fr_idx_loc(j,n),r_idx_loc(j+1,n)]=(0.5*dt/dx)*wloc[u_idx_loc(j+1,n)]-0.5 # F_rho -rho ## Ok
+                row.append(Fr_idx_loc(j,n)); col.append(r_idx_loc(j+1,n)); data.append((0.5*dt/dx)*wloc[u_idx_loc(j+1,n)]-0.5)
+                # J[Fr_idx_loc(j,n),u_idx_loc(j+1,n)]=(0.5*dt/dx)*wloc[r_idx_loc(j+1,n)] # F_rho - u  ## Ok
+                row.append(Fr_idx_loc(j,n)); col.append(u_idx_loc(j+1,n)); data.append((0.5*dt/dx)*wloc[r_idx_loc(j+1,n)])
+                # J[FV_idx_loc(j,n),V_idx_loc(j+1,n+1)]=eps # F_V - V  ## Ok 
+                row.append(FV_idx_loc(j,n)); col.append(V_idx_loc(j+1,n+1)); data.append(eps)
+        # J[Frint_idx_loc(j),r_idx_loc(j,n0)]=1 # F_rho_int - rho ## Ok
+        row.append(Frint_idx_loc(j)); col.append(r_idx_loc(j,n0)); data.append(1)
+        # J[FVter_idx_loc(j),V_idx_loc(j,F_Nt)]=1 # F_V_ter - V  ## Ok
+        row.append(FVter_idx_loc(j)); col.append(V_idx_loc(j,F_Nt)); data.append(1)
     
-    def jacobian(wloc): # Ignoring the forward-backward coupling  parts 
-        # print(wloc)
-        J=np.zeros((3*F_nby*F_nbx+2*F_nbx,3*F_nby*F_nbx+2*F_nbx))
-        for j in range(j0,F_Nx+1):
-            for n in range(n0,F_Nt):
-                J[Fr_idx_loc(j,n),r_idx_loc(j,n+1)]=1 # F_rho - rho ## Ok
-                J[Fu_idx_loc(j,n),u_idx_loc(j,n)]=1 # F_u - u  ## Ok
-                J[FV_idx_loc(j,n),V_idx_loc(j,n)]=-1 # F_V - V## Ok
-                J[FV_idx_loc(j,n),V_idx_loc(j,n+1)]=1-2*eps # F_V - V  ## Ok
-                
-                if j!=j0:
-                    J[Fr_idx_loc(j,n),r_idx_loc(j-1,n)]=-(0.5*dt/dx)*wloc[u_idx_loc(j-1,n)]-0.5 # F_rho -rho  ## Ok
-                    J[Fr_idx_loc(j,n),u_idx_loc(j-1,n)]=-(0.5*dt/dx)*wloc[r_idx_loc(j-1,n)] # F_rho - u  ## Ok
-                    J[FV_idx_loc(j,n),V_idx_loc(j-1,n+1)]=eps # F_V - V  ## Ok
-                if j!=F_Nx:
-                    J[Fr_idx_loc(j,n),r_idx_loc(j+1,n)]=(0.5*dt/dx)*wloc[u_idx_loc(j+1,n)]-0.5 # F_rho -rho ## Ok
-                    J[Fr_idx_loc(j,n),u_idx_loc(j+1,n)]=(0.5*dt/dx)*wloc[r_idx_loc(j+1,n)] # F_rho - u  ## Ok
-                    J[FV_idx_loc(j,n),V_idx_loc(j+1,n+1)]=eps # F_V - V  ## Ok   
-            J[Frint_idx_loc(j),r_idx_loc(j,n0)]=1 # F_rho_int - rho ## Ok
-            J[FVter_idx_loc(j),V_idx_loc(j,F_Nt)]=1 # F_V_ter - V  ## Ok
-        
-        return J
-    
-        
-    
-    # # get_preconditioner
-    Jac=jacobian(wloc)
-    M=np.linalg.inv(Jac)
-    
+    # return J
+    return row, col, data
+
+from scipy.sparse import csc_matrix
+import scipy.sparse.linalg as spla
+def get_preconditioner(wloc):
+    # Jac=jacobian(wloc)
+    row, col, data =jacobian(wloc)
+    shap=(3*F_nby*F_nbx+2*F_nbx,3*F_nby*F_nbx+2*F_nbx)
+    # M=np.linalg.inv(Jac)
     # Jac1 = csc_matrix(Jac)
-    # J_ilu = spla.spilu(Jac1)
-    # M_x = lambda r: J_ilu.solve(r)
-    # M = spla.LinearOperator(Jac.shape, M_x)
-        
-    # t0 = time.process_time()   ###
-    solu= newton_krylov(F, wloc, method='gmres', verbose=0, inner_M=M, x_rtol=2e-12) # verbose=1  , x_rtol=2e-12
-    # t1 = time.process_time()   ###
-    # print("Time spent (gmres) :",t1-t0)
+    Jac1 = csc_matrix((data, (row, col)),shape = shap)
+    J_ilu = spla.spilu(Jac1)
+    M_x = lambda r: J_ilu.solve(r)
+    M = spla.LinearOperator(shap, M_x)
     
-    return solu
+    return M
     
 
 ''' Calcul of global erreur............................................................................................. '''
+@njit(fastmath=True)
 def global_error(sol, sol_new): 
    
     local_error = 0
@@ -485,7 +528,8 @@ F_nby=F_Nt-n0
 it = 0
 convergence = False
 it_max = 1000
-epsilon = 2.e-16
+# it_max=1
+epsilon = 2.e-05
 
 ''' spend time................................................... '''
 t1 = MPI.Wtime()
@@ -532,11 +576,17 @@ while (not(convergence) and (it < it_max)):
     
     ''' Solve with Newton-GMRES solver'''
     # t0 = time.process_time()   ###
-    sol_loc=get_newton_krylov(guess_glob,guess_loc)
+    M=get_preconditioner(guess_loc)
+    # t1 = time.process_time()   ###
+    # print("Iteration", it,"Time spent (preconditionner) :",t1-t0)
+    F_loc = lambda x : F(x,guess_glob,f_star_p_LWR,f_star_LWR)  
+    # F_loc = lambda x : F(x,guess_glob,f_star_p_Sep,f_star_Sep)
+    # F_loc = lambda x : F(x,guess_glob,f_star_p_NonSep,f_star_NonSep)
+    # t0 = time.process_time()   ###
+    sol_loc= newton_krylov(F_loc, guess_loc, method='gmres', verbose=0, inner_M=M) # verbose=1  , x_rtol=2e-12
     # t1 = time.process_time()   ###
     # print("Time spent (gmres) :",t1-t0)
-        
-        
+    
     local_sol_to(sol_loc,rho_new,u_new,V_new)
     # if RANK==0:
     #     print('rho_new=',rho_new)
@@ -592,7 +642,25 @@ if RANK==0:
     solution_to(Nx,Nt,final_solu,f_rho,f_u,f_V)
     # print(Nx,Nt,final_solu.shape)
     
-    np.savetxt('PL_Sol0_LWR_T3_N1.dat', final_solu)
+    ############## LWR
+    # np.savetxt('plots/lwr/PL_njit_Sol0_LWR_T3_N1.dat', final_solu)
+    # np.savetxt('plots/lwr/PL_njit_Sol1_LWR_T3_N1.dat', final_solu)
+    # np.savetxt('plots/lwr/PL_njit_Sol2_LWR_T3_N1.dat', final_solu)
+    # np.savetxt('plots/lwr/PL_njit_Sol3_LWR_T3_N1.dat', final_solu)
+    # np.savetxt('plots/lwr/PL_njit_Sol4_LWR_T3_N1.dat', final_solu)
+    # np.savetxt('plots/lwr/PL_njit_Sol5_LWR_T3_N1.dat', final_solu)
+    ############## Separable
+    # np.savetxt('plots/sep/PL_njit_Sol0_Sep_T3_N1.dat', final_solu)
+    # np.savetxt('plots/sep/PL_njit_Sol1_Sep_T3_N1.dat', final_solu)
+    # np.savetxt('plots/sep/PL_njit_Sol2_Sep_T3_N1.dat', final_solu)
+    # np.savetxt('plots/sep/PL_njit_Sol3_Sep_T3_N1.dat', final_solu)
+    # np.savetxt('plots/sep/PL_njit_Sol5_Sep_T3_N1.dat', final_solu)
+    ############## Non-Separable
+    # np.savetxt('plots/nonsep/PL_njit_Sol0_NonSep_T3_N1.dat', final_solu)
+    # np.savetxt('plots/nonsep/PL_njit_Sol1_NonSep_T3_N1.dat', final_solu)
+    # np.savetxt('plots/nonsep/PL_njit_Sol2_NonSep_T3_N1.dat', final_solu)
+    # np.savetxt('plots/nonsep/PL_njit_Sol3_NonSep_T3_N1.dat', final_solu)
+    # np.savetxt('plots/nonsep/PL_njit_Sol5_NonSep_T3_N1.dat', final_solu)
 
 
 
