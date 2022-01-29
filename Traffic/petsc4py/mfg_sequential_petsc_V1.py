@@ -180,8 +180,148 @@ def formJacobian(snes, w, J, P):
             
     return PETSc.Mat.Structure.SAME_NONZERO_PATTERN
 
+####################################""for interpolation""""""""""""""""""""""""""""
+def sol_to(n_Nt,sol,rho,u,V):
+    for j in range(0,Nx):
+        for n in range(0,n_Nt):
+            rho[j,n]=sol[j*(n_Nt+1)+n]
+            u[j,n]=sol[(n_Nt+1)*Nx+j*n_Nt+n]
+            V[j,n]=sol[(2*n_Nt+1)*Nx+j*(n_Nt+1)+n]
+        rho[j,n_Nt]=sol[j*(n_Nt+1)+n_Nt]
+        V[j,n_Nt]=sol[(2*n_Nt+1)*Nx+j*(n_Nt+1)+n_Nt]
+    return 0
+
+def to_sol(n_Nt,sol,rho,u,V):
+    for j in range(0,2*Nx):
+        for n in range(0,2*n_Nt):
+            sol[j*(2*n_Nt+1)+n]=rho[j,n]
+            sol[(2*n_Nt+1)*2*Nx+j*2*n_Nt+n]=u[j,n]
+            sol[(2*2*n_Nt+1)*2*Nx+j*(2*n_Nt+1)+n]=V[j,n]
+        sol[j*(2*n_Nt+1)+2*n_Nt]=rho[j,2*n_Nt]
+        sol[(2*2*n_Nt+1)*2*Nx+j*(2*n_Nt+1)+2*n_Nt]=V[j,2*n_Nt]
+    return 0
+
+
+import scipy.interpolate as interpolate
+def interpol(n,new_n,data): # 1D interpolation
+    
+    """" Go from a coarse grid Nt*Nx to a finer grid spacing (2*Nt)*(2*Nx) """""
+    i = np.indices(data.shape)[0]/(n-1)  # [0, ..., 1]
+    new_i = np.linspace(0, 1, new_n)
+    linear_interpolation_func = interpolate.interp1d(i, data, kind='cubic') 
+    # ‘linear’, ‘nearest’, ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘previous’, or ‘next’.
+    new_data = linear_interpolation_func(new_i)
+    return new_data
+
+def multigrid(old_Nt,new_Nt,w):
+    rho=np.zeros((Nx,old_Nt+1))
+    u=np.zeros((Nx,old_Nt))
+    V=np.zeros((Nx,old_Nt+1))
+    sol_to(old_Nt,w,rho,u,V)
+    new1_rho=np.zeros((2*Nx,old_Nt+1))
+    new1_u=np.zeros((2*Nx,old_Nt))
+    new1_V=np.zeros((2*Nx,old_Nt+1))
+    for n in range(old_Nt):
+        new1_rho[:,n]=interpol(Nx,2*Nx,rho[:,n])
+        new1_u[:,n]=interpol(Nx,2*Nx,u[:,n])
+        new1_V[:,n]=interpol(Nx,2*Nx,V[:,n])
+    new1_rho[:,old_Nt]=interpol(Nx,2*Nx,rho[:,old_Nt])
+    new1_V[:,old_Nt]=interpol(Nx,2*Nx,V[:,old_Nt])
+    new_rho=np.zeros((2*Nx,2*new_Nt+1))
+    new_u=np.zeros((2*Nx,2*new_Nt))
+    new_V=np.zeros((2*Nx,2*new_Nt+1))
+    for j in range(2*Nx):
+        new_rho[j,:]=interpol(old_Nt+1,2*new_Nt+1,new1_rho[j,:])
+        new_u[j,:]=interpol(old_Nt,2*new_Nt,new1_u[j,:])
+        new_V[j,:]=interpol(old_Nt+1,2*new_Nt+1,new1_V[j,:])
+        
+    new_w = np.zeros(3*(2*new_Nt)*(2*Nx)+2*(2*Nx))
+    to_sol(new_Nt,new_w,new_rho,new_u,new_V)
+    
+    return new_w
+####################################################################
  
 # """************************ solve in grid 1***************************** """
+from petsc4py import PETSc
+
+shap=(3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx)
+
+# create nonlinear solver
+snes = PETSc.SNES()
+snes.create()
+
+F = PETSc.Vec()
+F.create()
+F.setSizes(shap[0])
+F.setFromOptions()
+
+b = None
+xx = PETSc.Vec().createSeq(shap[0]) 
+
+J = PETSc.Mat().create()
+J.setSizes(shap)
+J.setFromOptions()
+J.setUp()
+
+w = np.zeros(3*Nt*Nx+2*Nx)
+
+snes.setFunction(formFunction, F)
+snes.setJacobian(formJacobian)
+
+snes.getKSP().setType('fgmres')
+
+snes.setFromOptions()
+
+
+
+ksp = snes.getKSP()
+pc = ksp.getPC()
+opts = PETSc.Options()
+opts["ksp_rtol"] = 1.0e-6
+opts["pc_type"] = "lu"
+ksp.setFromOptions()
+
+snes.setTolerances(rtol = 1e-6)
+snes.setFromOptions()
+
+t0 = time.process_time()   ###
+snes.solve(b, xx)
+t1 = time.process_time()   ###
+time2=t1-t0
+print("Time spent:",time2)
+
+
+its = snes.getIterationNumber()
+lits = snes.getLinearSolveIterations()
+
+print ("Number of SNES iterations = :", its)
+print ("Number of Linear iterations =" , lits)
+
+litspit = lits/float(its)
+print ("Average Linear its / SNES = %e", float(litspit))
+
+
+# """************************ solve in grid 2***************************** """
+Nxx=2*Nx; Ntt=2*Nt
+# print('Nx={Nx}, Nt={Nt}'.format(Nx=Nxx,Nt=Ntt))
+dx=L/Nxx # spatial step size
+# print('dx={dx}, dt={dt}'.format(dx=round(dx,3),dt=round(dt,3)))
+if mu==0.0:
+    dt=min(T/Ntt,(CFL*dx)/u_max) # temporal step size
+    eps=0.0
+else:
+    dt=min(T/Ntt,CFL*dx/abs(u_max),EPS*(dx**2)/mu) # temporal step size
+    eps=mu*dt/(dx**2) # V
+x=np.linspace(0,L,Nxx+1)
+# t=np.linspace(0,T,Ntt+1)
+t=np.arange(0,T+dt,dt)
+Nt=int((len(t)-1)/2)
+# t0 = time.process_time()   ###
+guess=multigrid(int(Ntt/2),Nt,xx)
+# t1 = time.process_time()   ###
+# print("Time spent (multigrid) :",t1-t0)
+
+
 from petsc4py import PETSc
 
 shap=(3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx)
