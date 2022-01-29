@@ -203,12 +203,23 @@ J.setSizes(shap)
 J.setFromOptions()
 J.setUp()
 
+w = np.zeros(3*Nt*Nx+2*Nx)
+
 snes.setFunction(formFunction, F)
 snes.setJacobian(formJacobian)
 
 snes.getKSP().setType('fgmres')
 
 snes.setFromOptions()
+
+
+
+ksp = snes.getKSP()
+pc = ksp.getPC()
+opts = PETSc.Options()
+opts["ksp_rtol"] = 1.0e-6
+opts["pc_type"] = "lu"
+ksp.setFromOptions()
 
 snes.setTolerances(rtol = 1e-6)
 snes.setFromOptions()
