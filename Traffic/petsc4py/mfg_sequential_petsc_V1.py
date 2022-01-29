@@ -321,62 +321,7 @@ guess=multigrid(int(Ntt/2),Nt,xx)
 # t1 = time.process_time()   ###
 # print("Time spent (multigrid) :",t1-t0)
 
+##### guess : is the new guess (after interpolation)
+######## resolve the problem ...
 
-from petsc4py import PETSc
-
-shap=(3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx)
-
-# create nonlinear solver
-snes = PETSc.SNES()
-snes.create()
-
-F = PETSc.Vec()
-F.create()
-F.setSizes(shap[0])
-F.setFromOptions()
-
-b = None
-xx = PETSc.Vec().createSeq(shap[0]) 
-
-J = PETSc.Mat().create()
-J.setSizes(shap)
-J.setFromOptions()
-J.setUp()
-
-w = np.zeros(3*Nt*Nx+2*Nx)
-
-snes.setFunction(formFunction, F)
-snes.setJacobian(formJacobian)
-
-snes.getKSP().setType('fgmres')
-
-snes.setFromOptions()
-
-
-
-ksp = snes.getKSP()
-pc = ksp.getPC()
-opts = PETSc.Options()
-opts["ksp_rtol"] = 1.0e-6
-opts["pc_type"] = "lu"
-ksp.setFromOptions()
-
-snes.setTolerances(rtol = 1e-6)
-snes.setFromOptions()
-
-t0 = time.process_time()   ###
-snes.solve(b, xx)
-t1 = time.process_time()   ###
-time2=t1-t0
-print("Time spent:",time2)
-
-
-its = snes.getIterationNumber()
-lits = snes.getLinearSolveIterations()
-
-print ("Number of SNES iterations = :", its)
-print ("Number of Linear iterations =" , lits)
-
-litspit = lits/float(its)
-print ("Average Linear its / SNES = %e", float(litspit))
 
