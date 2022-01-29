@@ -22,7 +22,7 @@ rho_a=0.05; rho_b=0.95; gama=0.1
 mu=0.0 # viscosity coefficient 
 EPS=0.45
 ####################### grid's inputs
-Nx=30; Nt=30 # spatial-temporal grid sizes
+Nx=40; Nt=30; use_interp = 1 # spatial-temporal grid sizes, use interpolation
 dx=L/Nx # spatial step size
 if mu==0.0:
     dt=min(T/Nt,(CFL*dx)/u_max) # temporal step size
@@ -120,15 +120,14 @@ def interpol(n,new_n,data): # 1D interpolation
     """" Go from a coarse grid Nt*Nx to a finer grid spacing (2*Nt)*(2*Nx) """""
     i = np.indices(data.shape)[0]/(n-1)  # [0, ..., 1]
     new_i = np.linspace(0, 1, new_n)
-    linear_interpolation_func = interpolate.interp1d(i, data, kind='cubic') 
+    linear_interpolation_func = interpolate.interp1d(i, data, kind='linear') 
     # ‘linear’, ‘nearest’, ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘previous’, or ‘next’.
     new_data = linear_interpolation_func(new_i)
     return new_data
 
-def initialguess(snes, X):
+def initialguess(X):
     
     new_Nt = int(Nt/2)
-    new_Nx = int(Nx/2)
 
     w = np.loadtxt("sol.dat")
     
@@ -284,10 +283,16 @@ J.setUp()
 
 snes.setFunction(formFunction, F)
 snes.setJacobian(formJacobian)
-snes.setInitialGuess(initialguess)
+
+if use_interp:
+    # snes.setInitialGuess(initialguess)
+    X = np.zeros(shap[0])
+    X = initialguess(X)#snes.getInitialGuess()[0](snes, xx)
+    xx.setArray(X)
 
 
-snes.getKSP().setType('cg')
+
+snes.getKSP().setType('fgmres')
 # snes.setFromOptions()
 
 ksp = snes.getKSP()
@@ -301,8 +306,6 @@ ksp.setFromOptions()
 
 snes.setTolerances(rtol = 1e-6)
 snes.setFromOptions()
-
-
 
 t0 = time.process_time()   ###
 snes.solve(b, xx)
@@ -322,14 +325,15 @@ print ("Average Linear its / SNES = %e", float(litspit))
 
 
 
-import os
-filename = ("sol.dat")
-if os.path.exists(filename):
-    os.remove(filename)
-
-with open(filename, "a") as text_file:
-    text_file.write(str(Nx))
-    text_file.write("\n")
-    text_file.write(str(Nt))
-    text_file.write("\n")
-    np.savetxt(text_file, xx.array)
+if not use_interp:
+    import os
+    filename = ("sol.dat")
+    if os.path.exists(filename):
+        os.remove(filename)
+    
+    with open(filename, "a") as text_file:
+        text_file.write(str(Nx))
+        text_file.write("\n")
+        text_file.write(str(Nt))
+        text_file.write("\n")
+        np.savetxt(text_file, xx.array)
