@@ -23,7 +23,9 @@ mu=0.0 # viscosity coefficient
 EPS=0.45
 ####################### grid's inputs
 multip=3 # mutiple for interpolation
-Nx=15*multip; Nt=60*multip; use_interp = 1 # spatial-temporal grid sizes, use interpolation
+Nx=15; Nt=60; use_interp = 1 # spatial-temporal grid sizes, use interpolation
+if use_interp :
+    Nx=15*multip; Nt=60*multip
 dx=L/Nx # spatial step size
 if mu==0.0:
     dt=min(T/Nt,(CFL*dx)/u_max) # temporal step size
@@ -130,7 +132,7 @@ def initialguess(X):
     
     new_Nt = int(Nt/multip)
 
-    w = np.loadtxt("sol_15_60_mfg_sequential_petsc_V1.dat")
+    w = np.loadtxt("sol.dat")
     
     old_Nx = int(w[0])
     old_Nt = int(w[1])
