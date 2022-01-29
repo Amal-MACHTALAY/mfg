@@ -322,7 +322,11 @@ print ("Average Linear its / SNES = %e", float(litspit))
 
 
 
+import os
 filename = ("sol.dat")
+if os.path.exists(filename):
+    os.remove(filename)
+
 with open(filename, "a") as text_file:
     text_file.write(str(Nx))
     text_file.write("\n")
