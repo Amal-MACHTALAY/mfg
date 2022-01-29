@@ -1,0 +1,68 @@
+# b=mat(init)
+precond = ["hypre", "gamg", "lu"]#"telescope", "lu", "bjacobi", "bjacobi","jacobi", "sor", "asm",  "gasm"]
+# precond = ["lu"]
+precond = ["gamg"]# ,"bjacobi", "bjacobi","jacobi", "sor", "asm",  "gasm"]
+# for i in range(3):
+opts = PETSc.Options()
+
+for prec in precond:
+
+    # create linear solver
+    ksp = PETSc.KSP()
+    ksp.create()
+    
+    # ksp.setFromOptions()
+    # ksp.setType('fgmres')
+    ksp.setInitialGuessNonzero(1)
+    # pc = ksp.getPC()
+    # pc.setType(prec)
+    # opts["ksp_type"] = "fgmres"
+    # opts["mg_levels_ksp_type"] = "richardson"
+    # opts["ksp_rtol"] = 1.0e-10
+    # opts["ksp_atol"] =  1.0e-70
+    # opts["pc_type"] = "gamg"
+    # opts["mg_levels_ksp_type"] = "fgmres"
+    # opts["mg_levels_pc_type"] = "jacobi"
+    # opts["pc_gamg_coarse_eq_limit"] = 100
+    # opts["gamg_est_ksp_max_it"] = 10
+    # # opts["pc_gamg_threshold_scale"] = 0.25
+    # opts["petscspace_degree"] = 2
+    # opts["prop_steps"] = 8
+    # opts["pc_gamg_agg_nsmooths"] = 1
+    # opts["pc_gamg_process_eq_limit"] = 200
+    # opts["pc_gamg_reuse_interpolation"] = 'true'
+    # # opts["pc_gamg_threshold"] = -1
+    # opts["-pc_gamg_sym_graph"] = 'true'
+    
+    
+    # Set solver options
+    opts = PETSc.Options()
+    opts["ksp_type"] = "fgmres"
+    opts["ksp_rtol"] = 1.0e-10
+    opts["pc_type"] = "gamg"
+    
+    # Use Chebyshev smoothing for multigrid
+    opts["mg_levels_ksp_type"] = "chebyshev"
+    opts["mg_levels_pc_type"] = "jacobi"
+    
+    # Improve estimate of eigenvalues for Chebyshev smoothing
+    opts["mg_levels_esteig_ksp_type"] = "fgmres"
+    opts["mg_levels_ksp_chebyshev_esteig_steps"] = 10
+    # opts["mg_coarse_sub"] = "jacobi"
+    
+    
+    ksp.setFromOptions()
+    ksp.setOperators(mat)
+    
+    # pc.setMGLevels(1)
+    # pc.setGAMGLevels(10)
+    # pc.setGAMGSmooths(10)
+    # pc.setMGType(0)
+    # pc.setGAMGType("agg")
+    # pc.setFactorSolverType("mumps")pc.setGAMGLevels(1)
+    # ksp.setInitialGuessNonzero(1)
+    # pc.setHYPREType("pilut")
+    # pc.setASMType(2)
+
+    # ksp.setTolerances(rtol=1e-10)#,atol=1.e-50)#, max_it=30)
+    
