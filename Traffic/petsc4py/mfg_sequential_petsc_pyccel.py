@@ -8,9 +8,7 @@ Created on Tue Oct 19 15:43:29 2021
 
 import numpy as np
 import time
-from modules import (sol_to, to_sol, VT, f_star_p, f_star, r_idx,
-                     u_idx, V_idx, Fr_idx, Fu_idx, FV_idx, Frint_idx, FVter_idx,
-                     compute_jacobian, integrate_rho_int_v2, compute_FF)
+from modules import (sol_to, to_sol, compute_jacobian, compute_FF)
 '''************************ inputs ************************************'''
 T=3.0 # horizon length  
 u_max=1.0 # free flow speed
