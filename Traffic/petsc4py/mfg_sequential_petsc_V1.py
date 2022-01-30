@@ -325,7 +325,7 @@ if use_interp:
     xx.setArray(X)
 
 
-# snes.setType("ksponly")
+# snes.setType("ngmres")
 snes.getKSP().setType('lgmres')
 # snes.setFromOptions()
 
