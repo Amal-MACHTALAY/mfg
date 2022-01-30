@@ -330,12 +330,11 @@ snes.getKSP().setType('lgmres')
 # snes.setFromOptions()
 
 ksp = snes.getKSP()
-# pc = ksp.getPC()
-# pc.setFactorSolverType("mumps")
+pc = ksp.getPC()
+pc.setFactorSolverType("mumps")
 opts = PETSc.Options()
 opts["ksp_rtol"] = 1.0e-6
 opts["pc_type"] = "lu"
-# opts["dm_preallocate_only"] = True
 ksp.setInitialGuessNonzero(True)
 ksp.setFromOptions()
 
