@@ -21,7 +21,7 @@ mu=0.0 # viscosity coefficient
 EPS=0.45
 
 ####################### grid's inputs
-multip=3 # mutiple for interpolation
+multip=2 # mutiple for interpolation
 Nx=15; Nt=60; use_interp = 1 # spatial-temporal grid sizes, use interpolation
 if use_interp :
     Nx=15*multip; Nt=60*multip
@@ -97,7 +97,6 @@ if use_interp:
 
 # snes.setType("ngmres")
 snes.getKSP().setType('lgmres')
-# snes.setFromOptions()
 
 ksp = snes.getKSP()
 pc = ksp.getPC()

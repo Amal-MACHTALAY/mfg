@@ -5,7 +5,6 @@ Created on Tue Oct 19 15:43:29 2021
 @author: amal
 """
 
-
 import numpy as np
 from scipy import integrate
 import time
@@ -20,9 +19,10 @@ CFL=0.75    # CFL<1
 rho_a=0.05; rho_b=0.95; gama=0.1 
 mu=0.0 # viscosity coefficient 
 EPS=0.45
+
 ####################### grid's inputs
-multip=3 # mutiple for interpolation
-Nx=15; Nt=60; use_interp = 2 # spatial-temporal grid sizes, use interpolation
+multip=2 # mutiple for interpolation
+Nx=15; Nt=60; use_interp = 1 # spatial-temporal grid sizes, use interpolation
 if use_interp :
     Nx=15*multip; Nt=60*multip
 dx=L/Nx # spatial step size
@@ -324,7 +324,6 @@ if use_interp:
 
 # snes.setType("ngmres")
 snes.getKSP().setType('lgmres')
-# snes.setFromOptions()
 
 ksp = snes.getKSP()
 pc = ksp.getPC()
@@ -369,9 +368,9 @@ if not use_interp:
         np.savetxt(text_file, xx.array)
 
 
-#Free petsc elements
-xx.destroy()      
-F.destroy()                                     
-snes.destroy()
-ksp.destroy()
+# #Free petsc elements
+# xx.destroy()      
+# F.destroy()                                     
+# snes.destroy()
+# ksp.destroy()
 
