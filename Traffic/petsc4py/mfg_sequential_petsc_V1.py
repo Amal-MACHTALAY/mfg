@@ -22,7 +22,7 @@ rho_a=0.05; rho_b=0.95; gama=0.1
 mu=0.0 # viscosity coefficient 
 EPS=0.45
 ####################### grid's inputs
-multip=3 # mutiple for interpolation
+multip=2 # mutiple for interpolation
 Nx=15; Nt=60; use_interp = 1 # spatial-temporal grid sizes, use interpolation
 if use_interp :
     Nx=15*multip; Nt=60*multip
@@ -41,62 +41,65 @@ print('dx={dx}, dt={dt}'.format(dx=round(dx,4),dt=round(dt,4)))
 
 '''************************ functions **********************************'''
 @njit
-def U(rho): # Greenshields desired speed
+def U(rho:'float[:]'): # Greenshields desired speed
     return u_max*(1-rho/rho_jam)
 @njit
-def f_mfg_LWR(u,r):
+def f_mfg_LWR(u:'float[:]',r:'float[:]'):
     return 0.5*((U(r)-u)**2) # MFG-LWR
 @njit
-def f_star_p_LWR(p,r): # 0<=u<=u_max
+def f_star_p_LWR(p:'float[:]',r:'float[:]'): # 0<=u<=u_max
     return U(r)-p # MFG-LWR
 @njit
-def f_star_LWR(p,r): # p=Vx
+def f_star_LWR(p:'float[:]',r:'float[:]'): # p=Vx
     return -0.5*(p**2)+U(r)*p # MFG-LWR
+
 
 def integral(a,b): 
     x2 = lambda x: rho_int(x)
     I=integrate.quad(x2, a, b)
     return I[0]
+
 @njit
-def rho_int(s): # initial density
+def rho_int(s:'float[:]'): # initial density
     return rho_a+(rho_b-rho_a)*np.exp(-0.5*((s-0.5*L)/gama)**2) # 0<=rho<=rho_jam
 @njit
-def VT(a): # Terminal cost
+def VT(a:'float[:]'): # Terminal cost
     return 0.0
 @njit
-def r_idx(j,n):
+def r_idx(j:'int[:]',n:'int[:]'):
     return (j-1)*(Nt+1)+n
 @njit
-def u_idx(j,n):
+def u_idx(j:'int[:]',n:'int[:]'):
     return (Nt+1)*Nx+(j-1)*Nt+n
 @njit
-def V_idx(j,n):
+def V_idx(j:'int[:]',n:'int[:]'):
     return (2*Nt+1)*Nx+(j-1)*(Nt+1)+n
 @njit
-def Fr_idx(j,n):
+def Fr_idx(j:'int[:]',n:'int[:]'):
     return (j-1)*Nt+n
 @njit
-def Fu_idx(j,n):
+def Fu_idx(j:'int[:]',n:'int[:]'):
     return Nt*Nx+(j-1)*Nt+n
 @njit
-def FV_idx(j,n):
+def FV_idx(j:'int[:]',n:'int[:]'):
     return 2*Nt*Nx+(j-1)*Nt+n
 @njit
-def Frint_idx(j):
+def Frint_idx(j:'int[:]'):
     return 3*Nt*Nx+(j-1)
 @njit
-def FVter_idx(j):
+def FVter_idx(j:'int[:]'):
     return 3*Nt*Nx+Nx+(j-1)
 
 @njit
-def f_star_p(p,r): # 0<=u<=u_max
+def f_star_p(p:'float[:]',r:'float[:]'): # 0<=u<=u_max
     return U(r)-p # MFG-LWR
 @njit
-def f_star(p,r): # p=Vx
+def f_star(p:'float[:]',r:'float[:]'): # p=Vx
     return -0.5*(p**2)+U(r)*p # MFG-LWR
 
 ####################################""for interpolation""""""""""""""""""""""""""""
-def sol_to(old_Nt, old_Nx, sol,rho,u,V): # solution 1D to 2D
+@njit
+def sol_to(old_Nt:'int', old_Nx:'int', sol:'float[:]',rho:'float[:]',u:'float[:]',V:'float[:,:]'): # solution 1D to 2D
     for j in range(0,old_Nx):
         for n in range(0,old_Nt):
             rho[j,n]=sol[j*(old_Nt+1)+n]
@@ -106,7 +109,8 @@ def sol_to(old_Nt, old_Nx, sol,rho,u,V): # solution 1D to 2D
         V[j,old_Nt]=sol[(2*old_Nt+1)*old_Nx+j*(old_Nt+1)+old_Nt]
     return 0
 
-def to_sol(new_Nt, old_Nx,sol,rho,u,V):# solution 2D to 1D
+@njit
+def to_sol(new_Nt:'int', old_Nx:'int', sol:'float[:]', rho:'float[:,:]', u:'float[:,:]', V:'float[:,:]'):# solution 2D to 1D
     for j in range(0,multip*old_Nx):
         for n in range(0,multip*new_Nt):
             sol[j*(multip*new_Nt+1)+n]=rho[j,n]
@@ -128,6 +132,7 @@ def interpol(n,new_n,data): # 1D interpolation
     new_data = linear_interpolation_func(new_i)
     return new_data
 
+
 def initialguess(X):
     
     new_Nt = int(Nt/multip)
@@ -137,8 +142,7 @@ def initialguess(X):
     old_Nx = int(w[0])
     old_Nt = int(w[1])
     w = w[2:]
-    print(len(w))
-    
+
     rho=np.zeros((old_Nx,old_Nt+1))
     u=np.zeros((old_Nx,old_Nt))
     V=np.zeros((old_Nx,old_Nt+1))
@@ -212,43 +216,77 @@ def formFunction(snes, w, F):
     # F_V_ter , F[3*Nt*Nx+2*Nx-1] ************** 15
     FF[FVter_idx(Nx)]=w[V_idx(Nx,Nt)]-VT(x[Nx])
 
+@njit
+def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]'):
+    
+    cmpt = 0
+    for n in range(0,Nt):
+        for j in range(1,Nx+1): # 1,Nx-1
+            row[cmpt] = Fr_idx(j,n); col[cmpt] = r_idx(j,n+1); data[cmpt] = 1
+            cmpt +=1
+            row[cmpt] = Fu_idx(j,n); col[cmpt] = u_idx(j,n); data[cmpt] = 1
+            cmpt +=1
+            row[cmpt] = FV_idx(j,n); col[cmpt] = V_idx(j,n); data[cmpt] = -1
+            cmpt +=1
+            row[cmpt] = FV_idx(j,n); col[cmpt] = V_idx(j,n+1); data[cmpt] = 1-2*eps
+            cmpt +=1
+            
+            if j!=1:
+                row[cmpt] = Fr_idx(j,n); col[cmpt] = r_idx(j-1,n); data[cmpt] = -(0.5*dt/dx)*w[u_idx(j-1,n)]-0.5
+                cmpt +=1
+                row[cmpt] = Fr_idx(j,n); col[cmpt] = u_idx(j-1,n); data[cmpt] = -(0.5*dt/dx)*w[r_idx(j-1,n)]
+                cmpt +=1
+                row[cmpt] = FV_idx(j,n); col[cmpt] = V_idx(j-1,n+1); data[cmpt] = eps
+                cmpt +=1
+                
+            if j==1:
+                row[cmpt] = Fr_idx(j,n); col[cmpt] = r_idx(Nx,n); data[cmpt] = (0.5*dt/dx)*w[u_idx(Nx,n)]-0.5
+                cmpt +=1
+                row[cmpt] = Fr_idx(j,n); col[cmpt] = u_idx(Nx,n); data[cmpt] = -(0.5*dt/dx)*w[r_idx(Nx,n)]
+                cmpt +=1
+                row[cmpt] = FV_idx(j,n); col[cmpt] = V_idx(Nx,n+1); data[cmpt] = eps
+                cmpt +=1
+           
+            if j!=Nx:
+                row[cmpt] = Fr_idx(j,n); col[cmpt] = r_idx(j+1,n); data[cmpt] = (0.5*dt/dx)*w[u_idx(j+1,n)]-0.5
+                cmpt +=1
+                row[cmpt] = Fr_idx(j,n); col[cmpt] = u_idx(j+1,n); data[cmpt] = (0.5*dt/dx)*w[r_idx(j+1,n)]
+                cmpt +=1
+                row[cmpt] = FV_idx(j,n); col[cmpt] = V_idx(j+1,n+1); data[cmpt] = eps
+                cmpt +=1
+
+            if j==Nx:
+                row[cmpt] = Fr_idx(j,n); col[cmpt] = r_idx(1,n); data[cmpt] = (0.5*dt/dx)*w[u_idx(1,n)]-0.5
+                cmpt +=1
+                row[cmpt] = Fr_idx(j,n); col[cmpt] = u_idx(1,n); data[cmpt] = (0.5*dt/dx)*w[r_idx(1,n)]
+                cmpt +=1
+                row[cmpt] = FV_idx(j,n); col[cmpt] = V_idx(1,n+1); data[cmpt] = eps
+                cmpt +=1
+                
+    
+    for j in range(1,Nx+1):
+        row[cmpt] = Frint_idx(j); col[cmpt] = r_idx(j,0); data[cmpt] = 1
+        cmpt +=1
+        row[cmpt] = FVter_idx(j); col[cmpt] = V_idx(j,Nt); data[cmpt] = 1
+        cmpt +=1
+        
+
+row = np.zeros(10*Nt*Nx+2*Nx); col = np.zeros(10*Nt*Nx+2*Nx); data = np.zeros(10*Nt*Nx+2*Nx);
 def formJacobian(snes, w, J, P):
     # w = np.zeros(3*Nt*Nx+2*Nx)
     P.zeroEntries()
 
-    row = []; col = []; data = []
-    for n in range(0,Nt):
-        for j in range(1,Nx+1): # 1,Nx-1
-            row.append(Fr_idx(j,n)); col.append(r_idx(j,n+1)); data.append(1)
-            row.append(Fu_idx(j,n)); col.append(u_idx(j,n)); data.append(1)
-            row.append(FV_idx(j,n)); col.append(V_idx(j,n)); data.append(-1)
-            row.append(FV_idx(j,n)); col.append(V_idx(j,n+1)); data.append(1-2*eps)
-            if j!=1:
-                row.append(Fr_idx(j,n)); col.append(r_idx(j-1,n)); data.append(-(0.5*dt/dx)*w[u_idx(j-1,n)]-0.5)
-                row.append(Fr_idx(j,n)); col.append(u_idx(j-1,n)); data.append(-(0.5*dt/dx)*w[r_idx(j-1,n)])
-                row.append(FV_idx(j,n)); col.append(V_idx(j-1,n+1)); data.append(eps)
-            if j==1:
-                row.append(Fr_idx(j,n)); col.append(r_idx(Nx,n)); data.append((0.5*dt/dx)*w[u_idx(Nx,n)]-0.5)
-                row.append(Fr_idx(j,n)); col.append(u_idx(Nx,n)); data.append(-(0.5*dt/dx)*w[r_idx(Nx,n)])
-                row.append(FV_idx(j,n)); col.append(V_idx(Nx,n+1)); data.append(eps)
-            if j!=Nx:
-                row.append(Fr_idx(j,n)); col.append(r_idx(j+1,n)); data.append((0.5*dt/dx)*w[u_idx(j+1,n)]-0.5)
-                row.append(Fr_idx(j,n)); col.append(u_idx(j+1,n)); data.append((0.5*dt/dx)*w[r_idx(j+1,n)])
-                row.append(FV_idx(j,n)); col.append(V_idx(j+1,n+1)); data.append(eps)
-            if j==Nx:
-                row.append(Fr_idx(j,n)); col.append(r_idx(1,n)); data.append((0.5*dt/dx)*w[u_idx(1,n)]-0.5)
-                row.append(Fr_idx(j,n)); col.append(u_idx(1,n)); data.append((0.5*dt/dx)*w[r_idx(1,n)])
-                row.append(FV_idx(j,n)); col.append(V_idx(1,n+1)); data.append(eps)
-  
-    for j in range(1,Nx+1):
-        row.append(Frint_idx(j)); col.append(r_idx(j,0)); data.append(1)
-        row.append(FVter_idx(j)); col.append(V_idx(j,Nt)); data.append(1)
+    # row = []; col = []; data = []
+    row[:] = 0; col[:] = 0.; data[:] = 0.
     
+    compute_jacobian(w, row, col, data)
     
     P.setType("mpiaij")
     P.setFromOptions()
     P.setPreallocationNNZ(10)
     # P.setOption(option=19, flag=0)
+    
+    # print("len", len(w.array), len(row))
     
     for i in range(len(data)):
         P.setValues(row[i], col[i], data[i], addv=False)
@@ -277,13 +315,6 @@ F.setFromOptions()
 b = None
 xx = PETSc.Vec().createSeq(shap[0]) 
 
-J = PETSc.Mat().create()
-J.setSizes(shap)
-J.setFromOptions()
-J.setUp()
-
-# w = np.zeros(3*Nt*Nx+2*Nx)
-
 snes.setFunction(formFunction, F)
 snes.setJacobian(formJacobian)
 
@@ -294,16 +325,17 @@ if use_interp:
     xx.setArray(X)
 
 
-
-snes.getKSP().setType('fgmres')
+# snes.setType("ksponly")
+snes.getKSP().setType('lgmres')
 # snes.setFromOptions()
 
 ksp = snes.getKSP()
-pc = ksp.getPC()
-pc.setFactorSolverType("mumps")
+# pc = ksp.getPC()
+# pc.setFactorSolverType("mumps")
 opts = PETSc.Options()
 opts["ksp_rtol"] = 1.0e-6
 opts["pc_type"] = "lu"
+# opts["dm_preallocate_only"] = True
 ksp.setInitialGuessNonzero(True)
 ksp.setFromOptions()
 
@@ -325,7 +357,6 @@ print ("Number of Linear iterations =" , lits)
 
 litspit = lits/float(its)
 print ("Average Linear its / SNES = %e", float(litspit))
-
 
 
 if not use_interp:
