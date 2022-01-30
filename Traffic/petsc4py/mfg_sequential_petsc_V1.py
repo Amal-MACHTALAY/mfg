@@ -276,7 +276,6 @@ def formJacobian(snes, w, J, P):
     # w = np.zeros(3*Nt*Nx+2*Nx)
     P.zeroEntries()
 
-    # row = []; col = []; data = []
     row[:] = 0; col[:] = 0.; data[:] = 0.
     
     compute_jacobian(w, row, col, data)
@@ -286,7 +285,6 @@ def formJacobian(snes, w, J, P):
     P.setPreallocationNNZ(10)
     # P.setOption(option=19, flag=0)
     
-    # print("len", len(w.array), len(row))
     
     for i in range(len(data)):
         P.setValues(row[i], col[i], data[i], addv=False)
@@ -338,7 +336,7 @@ opts["pc_type"] = "lu"
 ksp.setInitialGuessNonzero(True)
 ksp.setFromOptions()
 
-snes.setTolerances(rtol = 1e-6)
+snes.setTolerances(rtol = 1e-8)
 snes.setFromOptions()
 
 t0 = time.process_time()   ###
@@ -370,3 +368,10 @@ if not use_interp:
         text_file.write(str(Nt))
         text_file.write("\n")
         np.savetxt(text_file, xx.array)
+
+
+#Free petsc elements
+xx.destroy()      
+F.destroy()                                     
+snes.destroy()
+ksp.destroy()
