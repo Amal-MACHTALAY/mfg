@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Tue Oct 19 15:43:29 2021
-
 @author: amal
 """
 
@@ -22,8 +21,8 @@ rho_a=0.05; rho_b=0.95; gama=0.1
 mu=0.0 # viscosity coefficient 
 EPS=0.45
 ####################### grid's inputs
-multip=2 # mutiple for interpolation
-Nx=15; Nt=60; use_interp = 1 # spatial-temporal grid sizes, use interpolation
+multip=3 # mutiple for interpolation
+Nx=15; Nt=60; use_interp = 2 # spatial-temporal grid sizes, use interpolation
 if use_interp :
     Nx=15*multip; Nt=60*multip
 dx=L/Nx # spatial step size
@@ -336,7 +335,7 @@ opts["pc_type"] = "lu"
 ksp.setInitialGuessNonzero(True)
 ksp.setFromOptions()
 
-snes.setTolerances(rtol = 1e-8)
+snes.setTolerances(rtol = 1e-6)
 snes.setFromOptions()
 
 t0 = time.process_time()   ###
@@ -375,3 +374,4 @@ xx.destroy()
 F.destroy()                                     
 snes.destroy()
 ksp.destroy()
+

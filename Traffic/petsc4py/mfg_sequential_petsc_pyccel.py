@@ -5,10 +5,11 @@ Created on Tue Oct 19 15:43:29 2021
 @author: amal
 """
 
-
 import numpy as np
 import time
-from modules import (sol_to, to_sol, compute_jacobian, compute_FF)
+from modules import (compute_jacobian, compute_FF)
+from tools import initialguess
+
 '''************************ inputs ************************************'''
 T=3.0 # horizon length  
 u_max=1.0 # free flow speed
@@ -18,6 +19,7 @@ CFL=0.75    # CFL<1
 rho_a=0.05; rho_b=0.95; gama=0.1 
 mu=0.0 # viscosity coefficient 
 EPS=0.45
+
 ####################### grid's inputs
 multip=3 # mutiple for interpolation
 Nx=15; Nt=60; use_interp = 1 # spatial-temporal grid sizes, use interpolation
@@ -35,59 +37,6 @@ t=np.arange(0,T+dt,dt)
 Nt=len(t)-1
 print('Nx={Nx}, Nt={Nt}'.format(Nx=Nx,Nt=Nt))
 print('dx={dx}, dt={dt}'.format(dx=round(dx,4),dt=round(dt,4)))
-
-'''************************ functions **********************************'''
-import scipy.interpolate as interpolate
-def interpol(n, new_n, data): # 1D interpolation
-    
-    """" Go from a coarse grid Nt*Nx to a finer grid spacing (2*Nt)*(2*Nx) """""
-    i = np.indices(data.shape)[0]/(n-1)  # [0, ..., 1]
-    new_i = np.linspace(0, 1, new_n)
-    linear_interpolation_func = interpolate.interp1d(i, data, kind='linear') 
-    # ‘linear’, ‘nearest’, ‘nearest-up’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘previous’, or ‘next’.
-    new_data = linear_interpolation_func(new_i)
-    return new_data
-
-
-def initialguess(X):
-    
-    new_Nt = int(Nt/multip)
-
-    w = np.loadtxt("sol.dat")
-    
-    old_Nx = int(w[0])
-    old_Nt = int(w[1])
-    w = w[2:]
-
-    rho=np.zeros((old_Nx,old_Nt+1))
-    u=np.zeros((old_Nx,old_Nt))
-    V=np.zeros((old_Nx,old_Nt+1))
-    sol_to(old_Nt,old_Nx, w,rho,u,V)
-    
-    new1_rho=np.zeros((multip*old_Nx,old_Nt+1))
-    new1_u=np.zeros((multip*old_Nx,old_Nt))
-    new1_V=np.zeros((multip*old_Nx,old_Nt+1))
-    for n in range(old_Nt):
-        new1_rho[:,n]=interpol(old_Nx,multip*old_Nx,rho[:,n])
-        new1_u[:,n]=interpol(old_Nx,multip*old_Nx,u[:,n])
-        new1_V[:,n]=interpol(old_Nx,multip*old_Nx,V[:,n])
-    new1_rho[:,old_Nt]=interpol(old_Nx,multip*old_Nx,rho[:,old_Nt])
-    new1_V[:,old_Nt]=interpol(old_Nx,multip*old_Nx,V[:,old_Nt])
-    new_rho=np.zeros((multip*old_Nx,multip*new_Nt+1))
-    new_u=np.zeros((multip*old_Nx,multip*new_Nt))
-    new_V=np.zeros((multip*old_Nx,multip*new_Nt+1))
-    for j in range(multip*old_Nx):
-        new_rho[j,:]=interpol(old_Nt+1,multip*new_Nt+1,new1_rho[j,:])
-        new_u[j,:]=interpol(old_Nt,multip*new_Nt,new1_u[j,:])
-        new_V[j,:]=interpol(old_Nt+1,multip*new_Nt+1,new1_V[j,:])
-        
-    new_w = np.zeros(3*(multip*new_Nt)*(multip*old_Nx)+2*(multip*old_Nx))
-    to_sol(new_Nt, old_Nx, new_w,new_rho,new_u,new_V, multip)
-  
-    X = new_w
-    
-    return X
-
 
 def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x):
     
@@ -142,7 +91,7 @@ snes.setJacobian(formJacobian)
 if use_interp:
     # snes.setInitialGuess(initialguess)
     X = np.zeros(shap[0])
-    X = initialguess(X)#snes.getInitialGuess()[0](snes, xx)
+    X = initialguess(X, Nt, Nx, multip)#snes.getInitialGuess()[0](snes, xx)
     xx.setArray(X)
 
 
