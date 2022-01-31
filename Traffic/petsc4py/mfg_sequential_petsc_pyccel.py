@@ -21,10 +21,11 @@ mu=0.0 # viscosity coefficient
 EPS=0.45
 
 ####################### grid's inputs
-multip=2 # mutiple for interpolation
-Nx=15; Nt=60; use_interp = 1 # spatial-temporal grid sizes, use interpolation
+multip=3 # mutiple for interpolation
+tol = 1e-10
+Nx=60; Nt=60; use_interp = 0 # spatial-temporal grid sizes, use interpolation
 if use_interp :
-    Nx=15*multip; Nt=60*multip
+    Nx=Nx*multip; Nt=Nt*multip
 dx=L/Nx # spatial step size
 if mu==0.0:
     dt=min(T/Nt,(CFL*dx)/u_max) # temporal step size
@@ -47,9 +48,8 @@ def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x):
 
 row = np.zeros(10*Nt*Nx+2*Nx, dtype=np.int64); col = np.zeros(10*Nt*Nx+2*Nx, dtype=np.int64); data = np.zeros(10*Nt*Nx+2*Nx);
 def formJacobian(snes, w, J, P):
-    # w = np.zeros(3*Nt*Nx+2*Nx)
     P.zeroEntries()
-
+    
     compute_jacobian(w.array, row, col, data, Nt, Nx, dt, dx, eps)
     
     P.setType("mpiaij")
@@ -66,51 +66,62 @@ def formJacobian(snes, w, J, P):
             
     return PETSc.Mat.Structure.SAME_NONZERO_PATTERN
 
+def formInitguess(snes, X):
+    X.array = initialguess(Nt, Nx, multip)
+    
+
  
 # """************************ solve in grid 1***************************** """
 from petsc4py import PETSc
 
+t0 = time.process_time()   ###
 shap=(3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx)
 
 # create nonlinear solver
 snes = PETSc.SNES()
 snes.create()
 
-F = PETSc.Vec()
-F.create()
-F.setSizes(shap[0])
-F.setFromOptions()
+da = PETSc.DMDA().create(dim = 1,
+                         boundary_type=(PETSc.DMDA.BoundaryType.NONE,),
+                         sizes = (shap[0],), dof = 1, stencil_width = 1)
+
+da.setFromOptions()
+da.setUp()
+snes.setDM(da)
+
+F = da.createGlobalVec()
 
 b = None
-xx = PETSc.Vec().createSeq(shap[0]) 
+xx = da.createGlobalVec()
 
 args = [Nt, Nx, dt, dx, eps, u_max, rho_jam, x]
 snes.setFunction(formFunction, F, args)
 snes.setJacobian(formJacobian)
 
 if use_interp:
-    # snes.setInitialGuess(initialguess)
-    X = np.zeros(shap[0])
-    X = initialguess(X, Nt, Nx, multip)#snes.getInitialGuess()[0](snes, xx)
-    xx.setArray(X)
+    snes.setInitialGuess(formInitguess)
+    # X = initialguess(Nt, Nx, multip)
+    # snes.getInitialGuess()[0](snes, xx)
+    # xx.setArray(X)
 
 
-# snes.setType("ngmres")
-snes.getKSP().setType('lgmres')
+snes.getKSP().setType('gmres')
 
 ksp = snes.getKSP()
 pc = ksp.getPC()
 pc.setFactorSolverType("mumps")
 opts = PETSc.Options()
-opts["ksp_rtol"] = 1.0e-6
+ksp.setTolerances(rtol=tol)
 opts["pc_type"] = "lu"
+# opts["ksp_viewer"]= 1
+# opts["ksp_monitor"]= 1
 ksp.setInitialGuessNonzero(True)
 ksp.setFromOptions()
 
-snes.setTolerances(rtol = 1e-6)
+snes.setTolerances(rtol = tol)
 snes.setFromOptions()
 
-t0 = time.process_time()   ###
+# t0 = time.process_time()   ###
 snes.solve(b, xx)
 t1 = time.process_time()   ###
 time2=t1-t0
@@ -122,9 +133,6 @@ lits = snes.getLinearSolveIterations()
 
 print ("Number of SNES iterations = :", its)
 print ("Number of Linear iterations =" , lits)
-
-litspit = lits/float(its)
-print ("Average Linear its / SNES = %e", float(litspit))
 
 
 if not use_interp:
@@ -141,8 +149,8 @@ if not use_interp:
         np.savetxt(text_file, xx.array)
 
 
-#Free petsc elements
-xx.destroy()      
-F.destroy()                                     
-snes.destroy()
-ksp.destroy()
+# #Free petsc elements
+# xx.destroy()      
+# F.destroy()                                     
+# snes.destroy()
+# ksp.destroy()

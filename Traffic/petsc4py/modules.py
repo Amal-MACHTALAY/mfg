@@ -139,11 +139,11 @@ def to_sol(new_Nt:'int', old_Nx:'int', sol:'float[:]', rho:'float[:,:]', u:'floa
         sol[(2*multip*new_Nt+1)*multip*old_Nx+j*(multip*new_Nt+1)+multip*new_Nt]=V[j,multip*new_Nt]
 
 ################################Jacobian#######################################
-@pure
+# @pure
 def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]', 
                      Nt:'int', Nx:'int', dt:'float', dx:'float', eps:'float'):
     
-    row[:] = 0; col[:] = 0.; data[:] = 0.
+    # row[:] = 0; col[:] = 0.; data[:] = 0.
     cmpt = 0
     for n in range(0,Nt):
         for j in range(1,Nx+1): # 1,Nx-1

@@ -21,7 +21,7 @@ def interpol(n, new_n, data): # 1D interpolation
     return new_data
 
 
-def initialguess(X, Nt, Nx, multip):
+def initialguess(Nt, Nx, multip):
     
     new_Nt = int(Nt/multip)
 
