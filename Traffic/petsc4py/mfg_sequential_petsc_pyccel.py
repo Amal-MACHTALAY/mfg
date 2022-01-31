@@ -22,8 +22,8 @@ EPS=0.45
 
 ####################### grid's inputs
 multip=3 # mutiple for interpolation
-tol = 1e-10
-Nx=60; Nt=60; use_interp = 0 # spatial-temporal grid sizes, use interpolation
+tol = 1e-6
+Nx=15; Nt=5; use_interp = 0 # spatial-temporal grid sizes, use interpolation
 if use_interp :
     Nx=Nx*multip; Nt=Nt*multip
 dx=L/Nx # spatial step size
@@ -48,19 +48,24 @@ def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x):
 
 row = np.zeros(10*Nt*Nx+2*Nx, dtype=np.int64); col = np.zeros(10*Nt*Nx+2*Nx, dtype=np.int64); data = np.zeros(10*Nt*Nx+2*Nx);
 def formJacobian(snes, w, J, P):
-    P.zeroEntries()
+    # P.zeroEntries()
+    
+    print(P.getSize())
     
     compute_jacobian(w.array, row, col, data, Nt, Nx, dt, dx, eps)
     
     P.setType("mpiaij")
     P.setFromOptions()
     P.setPreallocationNNZ(10)
-    # P.setOption(option=19, flag=0)
-    
+    P.setOption(option=19, flag=0)
+    # P.setFromOptions()
+    # print(max(row), max(col))
     for i in range(len(data)):
         P.setValues(row[i], col[i], data[i], addv=False)
     
     P.assemble()
+    
+    # print(P.view())
     if J != P:
         J.assemble()
             
@@ -74,6 +79,13 @@ def formInitguess(snes, X):
 # """************************ solve in grid 1***************************** """
 from petsc4py import PETSc
 
+
+OptDB = PETSc.Options()
+N = OptDB.getInt('N', 16)
+lambda_ = OptDB.getReal('lambda', 6.0)
+do_plot = OptDB.getBool('plot', False)
+
+
 t0 = time.process_time()   ###
 shap=(3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx)
 
@@ -83,7 +95,8 @@ snes.create()
 
 da = PETSc.DMDA().create(dim = 1,
                          boundary_type=(PETSc.DMDA.BoundaryType.NONE,),
-                         sizes = (shap[0],), dof = 1, stencil_width = 1)
+                         sizes = (shap[0],), dof = 1, stencil_width = 1,
+                         setup=False)
 
 da.setFromOptions()
 da.setUp()
@@ -96,6 +109,9 @@ xx = da.createGlobalVec()
 
 args = [Nt, Nx, dt, dx, eps, u_max, rho_jam, x]
 snes.setFunction(formFunction, F, args)
+# J = da.createMat()
+
+# print(J.view())
 snes.setJacobian(formJacobian)
 
 if use_interp:
@@ -113,11 +129,12 @@ pc.setFactorSolverType("mumps")
 opts = PETSc.Options()
 ksp.setTolerances(rtol=tol)
 opts["pc_type"] = "lu"
-# opts["ksp_viewer"]= 1
-# opts["ksp_monitor"]= 1
+# # opts["ksp_viewer"]= 1
+# # ksp.setFromOptions("-ksp_monitor")
 ksp.setInitialGuessNonzero(True)
 ksp.setFromOptions()
 
+# snes.setUseMF(True)
 snes.setTolerances(rtol = tol)
 snes.setFromOptions()
 
@@ -133,24 +150,46 @@ lits = snes.getLinearSolveIterations()
 
 print ("Number of SNES iterations = :", its)
 print ("Number of Linear iterations =" , lits)
+print("Error norm is:", xx.norm())
 
-
-if not use_interp:
-    import os
-    filename = ("sol.dat")
-    if os.path.exists(filename):
-        os.remove(filename)
+# if not use_interp:
+#     import os
+#     filename = ("sol.dat")
+#     if os.path.exists(filename):
+#         os.remove(filename)
     
-    with open(filename, "a") as text_file:
-        text_file.write(str(Nx))
-        text_file.write("\n")
-        text_file.write(str(Nt))
-        text_file.write("\n")
-        np.savetxt(text_file, xx.array)
+#     with open(filename, "a") as text_file:
+#         text_file.write(str(Nx))
+#         text_file.write("\n")
+#         text_file.write(str(Nt))
+#         text_file.write("\n")
+#         np.savetxt(text_file, xx.array)
 
 
-#Free petsc elements
-xx.destroy()      
-F.destroy()                                     
-snes.destroy()
-ksp.destroy()
+# #Free petsc elements
+# xx.destroy()      
+# F.destroy()                                     
+# snes.destroy()
+# ksp.destroy()
+
+def plot(da, U):
+   comm = da.getComm()
+   scatter, U0 = PETSc.Scatter.toZero(U)
+   scatter.scatter(U, U0, False, PETSc.Scatter.Mode.FORWARD)
+   rank = comm.getRank()
+   if rank == 0:
+       solution = U0[...]
+       solution = solution.reshape(da.sizes, order='f').copy()
+       try:
+           from matplotlib import pyplot
+           pyplot.contourf(solution)
+           pyplot.axis('equal')
+           pyplot.show()
+       except:
+           pass
+       comm.barrier()
+       scatter.destroy()
+       U0.destroy()
+       
+      
+# plot(da, xx)
