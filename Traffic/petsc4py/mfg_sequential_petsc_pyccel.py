@@ -149,8 +149,8 @@ if not use_interp:
         np.savetxt(text_file, xx.array)
 
 
-# #Free petsc elements
-# xx.destroy()      
-# F.destroy()                                     
-# snes.destroy()
-# ksp.destroy()
+#Free petsc elements
+xx.destroy()      
+F.destroy()                                     
+snes.destroy()
+ksp.destroy()
