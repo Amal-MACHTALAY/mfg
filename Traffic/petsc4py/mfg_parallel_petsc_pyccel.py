@@ -276,7 +276,6 @@ t1 = time.process_time()   ###
 time2=t1-t0
 print("Time spent:",time2)
 
-
 its = snes.getIterationNumber()
 lits = snes.getLinearSolveIterations()
 

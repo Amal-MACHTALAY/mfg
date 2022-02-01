@@ -147,34 +147,11 @@ def loc_to_glob(i,j,Nx,Nt,cord0,cord1):
         I=i+cord0*Nx    # Nx=(ex-sx+1)
         J=j+cord1*Nt    # Nt=(ey-sy+1)
         return I,J 
-@pure    
-def block_vector_idx(idx:'int[:]',i:'int',j:'int',Nx:'int',Nt:'int'): 
-    # w_idx=[r_idx(i,j),u_idx(i,j),V_idx(i,j)]
-        cmpt = 0
-        idx[cmpt]=r_idx(i,j,Nt) 
-        cmpt +=1
-        if j!=Nt:
-            idx[cmpt]=u_idx(i,j,Nt,Nx)
-        cmpt +=1
-        idx[cmpt]=V_idx(i,j,Nt,Nx)
 @pure        
 def indx1(i,j,Nt): 
     return (i-1)*(Nt+1)+j
-@pure
-def block_F_eq_idx(idx:'int[:]',i:'int',j:'int',Nx:'int',Nt:'int'): # F_eq : contain equations
-        cmpt = 0
-        idx[cmpt]=Fr_idx(i,j,Nt)  
-        cmpt +=1
-        idx[cmpt]=Fu_idx(i,j,Nt,Nx) 
-        cmpt +=1
-        idx[cmpt]=FV_idx(i,j,Nt,Nx)
-@pure
-def block_F_cond_idx(idx:'int[:]',j:'int',Nx:'int',Nt:'int'): # F_cond : contain intitial and terminal conditions
-        cmpt = 0
-        idx[cmpt]=Frint_idx(j,Nt,Nx) 
-        cmpt +=1
-        idx[cmpt]=FVter_idx(j,Nt,Nx)
-        
+
+@pure         
 def indx2(i,j,Nt): 
     return (i-1)*Nt+j
     
@@ -183,21 +160,24 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',
                      Nt:'int', Nx:'int', dt:'float', dx:'float', eps:'float', cord0:'int', cord1:'int', Nxg:'int', Ntg:'int'):
     ###### cord0=coord2d[0], cord1=coord2d[0], Nxg=npoints[0], Ntg=npoints[1], Nx=(ex-sx+1), Nt=(ey-sy+1)
     
-    w_idx=np.zeros((Nt+1)*Nx, dtype=np.int64) # local (if global : change Nx, Nt with Nxg, Ntg)
+    
+    w_idx=[ [ 0 ] * 3] * ((Nt+1)*Nx) # local (if global : change Nx, Nt with Nxg, Ntg)
     for j in range(1,Nx+1):
         for n in range(0,Nt+1):
-            print(j,n)
-            print(w_idx[indx1(j,n,Nt)])
-            block_vector_idx(w_idx[indx1(j,n,Nt)],j,n,Nx,Nt)               
+            if n!=Nt:
+                w_idx[indx1(j,n,Nt)]=[r_idx(j,n,Nt),u_idx(j,n,Nt,Nx),V_idx(j,n,Nt,Nx)]
+            if n==Nt:
+                w_idx[indx1(j,n,Nt)]=[r_idx(j,n,Nt),0,V_idx(j,n,Nt,Nx)]
+              
     ## Then use : r_indx(j,n,Nt)=w_idx[indx1(j,n,Nt)][0], u_indx(j,n,Nt)=w_idx[indx1(j,n,Nt)][1], V_indx(j,n,Nt)=w_idx[indx1(j,n,Nt)][2]
         
     
-    FF_eq_idx=np.zeros(Ntg*Nxg, dtype=np.int64) # global (if local : change Nxg, Ntg with Nx, Nt)
-    FF_cond_idx=np.zeros(Nxg)
+    FF_eq_idx=[ [ 0 ] * 3] * (Ntg*Nxg) # global (if local : change Nxg, Ntg with Nx, Nt)
+    FF_cond_idx=[ [ 0 ] * 2] * (Nxg+1)
     for j in range(1,Nxg+1):
-        block_F_cond_idx(FF_cond_idx[j],j,Nxg,Ntg)
+        FF_cond_idx[j]=[Frint_idx(j,Ntg,Nxg),FVter_idx(j,Ntg,Nxg)]
         for n in range(0,Ntg):
-            block_F_eq_idx(FF_eq_idx[indx2(j,n,Ntg)],j,n,Nxg,Ntg)  
+            FF_eq_idx[indx2(j,n,Ntg)]=[Fr_idx(j,n,Ntg),Fu_idx(j,n,Ntg,Nxg),FV_idx(j,n,Ntg,Nxg)]
              
     ## Then use : Fr_indx(j,n)=FF_eq_idx[indx2(J,N,Ntg)][0], Fu_indx(j,n)=FF_eq_idx[indx2(J,N,Ntg)][1], FV_indx(j,n)=FF_eq_idx[indx2(J,N,Ntg)][2]
                 # Fint_indx(j)=FF_cond_idx[J][0], Fter_indx(j)=FF_cond_idx[J][1]
@@ -285,20 +265,23 @@ def compute_FF(w:'float[:]', FF:'float[:]', Nt:'int', Nx:'int', dt:'float', dx:'
                u_max:'float', rho_jam:'float', x:'float[:]', cord0:'int', cord1:'int', Nxg:'int', Ntg:'int'):
     ###### cord0=coord2d[0], cord1=coord2d[0], Nxg=npoints[0], Ntg=npoints[1], Nx=(ex-sx+1), Nt=(ey-sy+1)
     
-    w_idx=np.zeros((Nt+1)*Nx, dtype=np.int64) # local (if global : change Nx, Nt with Nxg, Ntg)
+    w_idx=[ [ 0 ] * 3] * ((Nt+1)*Nx) # local (if global : change Nx, Nt with Nxg, Ntg)
     for j in range(1,Nx+1):
         for n in range(0,Nt+1):
-            block_vector_idx(w_idx[indx1(j,n,Nt)],j,n,Nx,Nt)               
+            if n!=Nt:
+                w_idx[indx1(j,n,Nt)]=[r_idx(j,n,Nt),u_idx(j,n,Nt,Nx),V_idx(j,n,Nt,Nx)]
+            if n==Nt:
+                w_idx[indx1(j,n,Nt)]=[r_idx(j,n,Nt),0,V_idx(j,n,Nt,Nx)]          
     ## Then use : r_indx(j,n,Nt)=w_idx[indx1(j,n,Nt)][0], u_indx(j,n,Nt)=w_idx[indx1(j,n,Nt)][1], V_indx(j,n,Nt)=w_idx[indx1(j,n,Nt)][2]
         
-    
-    FF_eq_idx=np.zeros(Ntg*Nxg, dtype=np.int64) # global (if local : change Nxg, Ntg with Nx, Nt)
-    FF_cond_idx=np.zeros(Nxg)
+
+    FF_eq_idx=[ [ 0 ] * 3] * (Ntg*Nxg) # global (if local : change Nxg, Ntg with Nx, Nt)
+    FF_cond_idx=[ [ 0 ] * 2] * (Nxg+1)
     for j in range(1,Nxg+1):
-        block_F_cond_idx(FF_cond_idx[j],j,Nxg,Ntg)
+        FF_cond_idx[j]=[Frint_idx(j,Ntg,Nxg),FVter_idx(j,Ntg,Nxg)]
         for n in range(0,Ntg):
-            block_F_eq_idx(FF_eq_idx[indx2(j,n,Ntg)],j,n,Nxg,Ntg)  
-             
+            FF_eq_idx[indx2(j,n,Ntg)]=[Fr_idx(j,n,Ntg),Fu_idx(j,n,Ntg,Nxg),FV_idx(j,n,Ntg,Nxg)]
+
     ## Then use : Fr_indx(j,n)=FF_eq_idx[indx2(J,N,Ntg)][0], Fu_indx(j,n)=FF_eq_idx[indx2(J,N,Ntg)][1], FV_indx(j,n)=FF_eq_idx[indx2(J,N,Ntg)][2]
                 # Fint_indx(j)=FF_cond_idx[J][0], Fter_indx(j)=FF_cond_idx[J][1]
 
@@ -383,3 +366,4 @@ def compute_FF(w:'float[:]', FF:'float[:]', Nt:'int', Nx:'int', dt:'float', dx:'
     # F_V_ter , F[3*Nt*Nx+2*Nx-1] ************** 15
     # FF[FVter_idx(Nx,Nt,Nx)]=w[V_idx(Nx,Nt,Nt,Nx)]-VT(x[Nx])
     FF[FF_cond_idx[J][1]]=w[w_idx[indx1(j,Nt,Nt)][2]]-VT(x[Nx])
+    
