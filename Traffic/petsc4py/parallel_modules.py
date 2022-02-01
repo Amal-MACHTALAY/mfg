@@ -1,4 +1,5 @@
 from pyccel.decorators import pure
+import numpy as np
 
 '''************************ functions **********************************'''
 @pure
@@ -141,13 +142,13 @@ def to_sol(new_Nt:'int', old_Nx:'int', sol:'float[:]', rho:'float[:,:]', u:'floa
 
 ################################Jacobian#######################################
 
-import numpy as np
-def loc_to_glob(i,j,Nx,Nt,cord0,cord1):
+@pure
+def loc_to_glob(i,j,Nx,Nt,cord0,cord1): 
         I=i+cord0*Nx    # Nx=(ex-sx+1)
         J=j+cord1*Nt    # Nt=(ey-sy+1)
         return I,J 
-    
-def block_vector_idx(idx,i,j,Nx,Nt): 
+@pure    
+def block_vector_idx(idx:'int[:]',i:'int',j:'int',Nx:'int',Nt:'int'): 
     # w_idx=[r_idx(i,j),u_idx(i,j),V_idx(i,j)]
         cmpt = 0
         idx[cmpt]=r_idx(i,j,Nt) 
@@ -156,19 +157,19 @@ def block_vector_idx(idx,i,j,Nx,Nt):
             idx[cmpt]=u_idx(i,j,Nt,Nx)
         cmpt +=1
         idx[cmpt]=V_idx(i,j,Nt,Nx)
-        
+@pure        
 def indx1(i,j,Nt): 
     return (i-1)*(Nt+1)+j
-
-def block_F_eq_idx(idx,i,j,Nx,Nt): # F_eq : contain equations
+@pure
+def block_F_eq_idx(idx:'int[:]',i:'int',j:'int',Nx:'int',Nt:'int'): # F_eq : contain equations
         cmpt = 0
         idx[cmpt]=Fr_idx(i,j,Nt)  
         cmpt +=1
         idx[cmpt]=Fu_idx(i,j,Nt,Nx) 
         cmpt +=1
         idx[cmpt]=FV_idx(i,j,Nt,Nx)
-
-def block_F_cond_idx(idx,j,Nx,Nt): # F_cond : contain intitial and terminal conditions
+@pure
+def block_F_cond_idx(idx:'int[:]',j:'int',Nx:'int',Nt:'int'): # F_cond : contain intitial and terminal conditions
         cmpt = 0
         idx[cmpt]=Frint_idx(j,Nt,Nx) 
         cmpt +=1
@@ -177,19 +178,21 @@ def block_F_cond_idx(idx,j,Nx,Nt): # F_cond : contain intitial and terminal cond
 def indx2(i,j,Nt): 
     return (i-1)*Nt+j
     
-# @pure
+@pure
 def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]', 
                      Nt:'int', Nx:'int', dt:'float', dx:'float', eps:'float', cord0:'int', cord1:'int', Nxg:'int', Ntg:'int'):
     ###### cord0=coord2d[0], cord1=coord2d[0], Nxg=npoints[0], Ntg=npoints[1], Nx=(ex-sx+1), Nt=(ey-sy+1)
     
-    w_idx=np.zeros((Nt+1)*Nx) # local (if global : change Nx, Nt with Nxg, Ntg)
+    w_idx=np.zeros((Nt+1)*Nx, dtype=np.int64) # local (if global : change Nx, Nt with Nxg, Ntg)
     for j in range(1,Nx+1):
         for n in range(0,Nt+1):
+            print(j,n)
+            print(w_idx[indx1(j,n,Nt)])
             block_vector_idx(w_idx[indx1(j,n,Nt)],j,n,Nx,Nt)               
     ## Then use : r_indx(j,n,Nt)=w_idx[indx1(j,n,Nt)][0], u_indx(j,n,Nt)=w_idx[indx1(j,n,Nt)][1], V_indx(j,n,Nt)=w_idx[indx1(j,n,Nt)][2]
         
     
-    FF_eq_idx=np.zeros(Ntg*Nxg) # global (if local : change Nxg, Ntg with Nx, Nt)
+    FF_eq_idx=np.zeros(Ntg*Nxg, dtype=np.int64) # global (if local : change Nxg, Ntg with Nx, Nt)
     FF_cond_idx=np.zeros(Nxg)
     for j in range(1,Nxg+1):
         block_F_cond_idx(FF_cond_idx[j],j,Nxg,Ntg)
@@ -277,19 +280,19 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',
         cmpt +=1
         
 
-    
+@pure    
 def compute_FF(w:'float[:]', FF:'float[:]', Nt:'int', Nx:'int', dt:'float', dx:'float', eps:'float',
                u_max:'float', rho_jam:'float', x:'float[:]', cord0:'int', cord1:'int', Nxg:'int', Ntg:'int'):
     ###### cord0=coord2d[0], cord1=coord2d[0], Nxg=npoints[0], Ntg=npoints[1], Nx=(ex-sx+1), Nt=(ey-sy+1)
     
-    w_idx=np.zeros((Nt+1)*Nx) # local (if global : change Nx, Nt with Nxg, Ntg)
+    w_idx=np.zeros((Nt+1)*Nx, dtype=np.int64) # local (if global : change Nx, Nt with Nxg, Ntg)
     for j in range(1,Nx+1):
         for n in range(0,Nt+1):
             block_vector_idx(w_idx[indx1(j,n,Nt)],j,n,Nx,Nt)               
     ## Then use : r_indx(j,n,Nt)=w_idx[indx1(j,n,Nt)][0], u_indx(j,n,Nt)=w_idx[indx1(j,n,Nt)][1], V_indx(j,n,Nt)=w_idx[indx1(j,n,Nt)][2]
         
     
-    FF_eq_idx=np.zeros(Ntg*Nxg) # global (if local : change Nxg, Ntg with Nx, Nt)
+    FF_eq_idx=np.zeros(Ntg*Nxg, dtype=np.int64) # global (if local : change Nxg, Ntg with Nx, Nt)
     FF_cond_idx=np.zeros(Nxg)
     for j in range(1,Nxg+1):
         block_F_cond_idx(FF_cond_idx[j],j,Nxg,Ntg)

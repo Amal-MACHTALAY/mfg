@@ -39,7 +39,7 @@ EPS=0.45
 ####################### grid's inputs
 multip=6 # mutiple for interpolation
 tol = 1e-6
-Nx=30; Nt=60; use_interp = 0 # spatial-temporal grid sizes, use interpolation
+Nx=31; Nt=60; use_interp = 0 # spatial-temporal grid sizes, use interpolation
 if use_interp :
     Nx=Nx*multip; Nt=Nt*multip
 dx=L/Nx # spatial step size
@@ -59,7 +59,7 @@ def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x):
     w = w.array
     
     compute_FF(w, FF, Nt, Nx, dt, dx, eps, u_max, rho_jam, x, coord2d[0], coord2d[1], npoints[0], npoints[1])
-    
+
 
 row = np.zeros(10*Nt*Nx+2*Nx, dtype=np.int64); col = np.zeros(10*Nt*Nx+2*Nx, dtype=np.int64); 
 data = np.zeros(10*Nt*Nx+2*Nx);
@@ -155,6 +155,8 @@ def create_2dCoords(cart2d, npoints, dims):
 
     print("Rank in the topology :",RANK," Local Grid Index :", sx, " to ", \
           ex," along x, ", sy, " to", ey," along y")
+    # print(coord2d)
+    # communicate sx,ex,sy,ey
     
     return sx, ex, sy, ey
 
@@ -213,7 +215,7 @@ local_shap=(3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx)
 #     return I,J
 
 
-import sys; sys.exit()
+# import sys; sys.exit()
 
 # """************************ solve in grid 1***************************** """
 from petsc4py import PETSc
@@ -245,7 +247,7 @@ snes.setFunction(formFunction, F, args)
 snes.setJacobian(formJacobian)
 
 
-print(F.getSize())
+# print(F.getSize())
 # if use_interp:
 #     #snes.setInitialGuess(formInitguess)
 #     X = initialguess(Nt, Nx, multip)#snes.getInitialGuess()[0](snes, xx)
