@@ -15,7 +15,7 @@ Created on Tue Oct 19 15:43:29 2021
 
 import numpy as np
 import time
-from modules import (compute_jacobian, compute_FF)
+from parallel_modules import (compute_jacobian, compute_FF)
 from tools import initialguess
 from psydac.ddm.partition import mpi_compute_dims
 
@@ -58,7 +58,7 @@ def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x):
     FF = F.array
     w = w.array
     
-    compute_FF(w, FF, Nt, Nx, dt, dx, eps, u_max, rho_jam, x)
+    compute_FF(w, FF, Nt, Nx, dt, dx, eps, u_max, rho_jam, x, coord2d[0], coord2d[1], npoints[0], npoints[1])
     
 
 row = np.zeros(10*Nt*Nx+2*Nx, dtype=np.int64); col = np.zeros(10*Nt*Nx+2*Nx, dtype=np.int64); 
@@ -67,7 +67,7 @@ data = np.zeros(10*Nt*Nx+2*Nx);
 def formJacobian(snes, w, J, P):
     P.zeroEntries()
     
-    compute_jacobian(w.array, row, col, data, Nt, Nx, dt, dx, eps)
+    compute_jacobian(w.array, row, col, data, Nt, Nx, dt, dx, eps, coord2d[0], coord2d[1], npoints[0], npoints[1])
     
     P.setType("mpiaij")
     P.setFromOptions()
@@ -207,6 +207,11 @@ Nt = ey-sy+1
 
 local_shap=(3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx)
 
+# def loc_to_glob(i,j):
+#     I=i+coord2d[0]*(ex-sx+1)
+#     J=j+coord2d[1]*(ey-sy+1)
+#     return I,J
+
 
 import sys; sys.exit()
 
@@ -220,8 +225,8 @@ t0 = time.process_time()   ###
 snes = PETSc.SNES()
 snes.create()
 da = PETSc.DMDA().create(dim = 1,
-                         boundary_type=(PETSc.DMDA.BoundaryType.NONE,),
-                         sizes = (local_shap[0],), dof = 1, stencil_width = 1)
+                          boundary_type=(PETSc.DMDA.BoundaryType.NONE,),
+                          sizes = (local_shap[0],), dof = 1, stencil_width = 1)
 
 da.setFromOptions()
 da.setUp()
