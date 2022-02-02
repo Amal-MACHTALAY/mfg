@@ -84,6 +84,8 @@ def formInitguess(snes, w):
 
 def formJacobian(snes, w, J, P):
     
+    print(w.view())
+    
     ww = w.array    
     sendcounts = np.array(COMM.allgather(len(ww)))
     
@@ -111,11 +113,21 @@ def formJacobian(snes, w, J, P):
     if J != P:
         J.assemble()
         
-    # print(P.view())
-    # import sys; sys.exit()
+    print(P.view())
+    import sys; sys.exit()
             
     return PETSc.Mat.Structure.SAME_NONZERO_PATTERN
 
+def my_sum(aa, bb, mpi_datatype):
+    a = np.frombuffer(aa, dtype=np.double)
+    b = np.frombuffer(bb, dtype=np.double)
+    for i in range(len(a)):
+        if abs(a[i]) > abs(b[i]):
+            b[i] = a[i]
+        if abs(a[i]) > abs(b[i]):
+            b[i] = b[i]
+
+my_op = MPI.Op.Create(my_sum)
 # """************************ solve in grid 1***************************** """
 def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x):
     
@@ -135,69 +147,40 @@ def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x):
     COMM.Gatherv(sendbuf=ww, recvbuf=(recvbuf1, sendcounts), root=0)  
     COMM.Gatherv(sendbuf=FF, recvbuf=(recvbuf2, sendcounts), root=0)
 
-    # COMM.gatherv([ww, sendcounts, MPI.DOUBLE], recvbuf1, root = 0)
-    # COMM.gatherv([FF, sendcounts, MPI.DOUBLE], recvbuf2, root = 0)
     ww = COMM.bcast(recvbuf1, root=0)
     FF = COMM.bcast(recvbuf2, root=0)
+    # print(w.view())
     
-    # xlocal = daa.getLocalVec()
-    # daa.localToGlobal(w, xlocal)
-    
-    # flocal = daa.getLocalVec()
-    # daa.localToGlobal(F, flocal)
-    # # print(F.getSize())
-    # # print(w.getSize())
-    
-    # xx = daa.getVecArray(xlocal)
-    # ff = daa.getVecArray(flocal)
-    
-    # print(xx.)
-    # ww = daa.getLocalVec()
-    # # ww = daa.getGlobalVec()
-    
-    # # print(ww.sizes, w.sizes)
-    # print(len(w))
-    
-    # print(da.ranges, da.getRanges())
     compute_FF(ww, FF, Nt, Nx, dt, dx, eps, u_max, rho_jam, x, np.array(da.ranges), RANK)
-    # FFlocal = da.createLocalVec()
-    # daa.globalToLocal(F, FFlocal)
-    
-    
-    # FF = FFlocal
-    # # FF = COMM.Allreduce(FF)
-    # the 'totals' array will hold the sum of each 'data' array
     totals = np.zeros_like(FF)
     
     # # use MPI to get the totals 
     COMM.Allreduce(
         [FF, MPI.DOUBLE],
         [totals, MPI.DOUBLE],
-        op = MPI.MIN,
+        op = my_op,
     )
-    # # # rhs0 = COMM.allreduce(FF, op=MPI.SUM)
-
     FF = totals
+    
+    totals = np.zeros_like(ww)
+    # # use MPI to get the totals 
+    COMM.Allreduce(
+        [ww, MPI.DOUBLE],
+        [totals, MPI.DOUBLE],
+        op = my_op,
+    )
+    ww = totals
+    
     FFlocal = F.getArray()
     COMM.Scatterv([FF, sendcounts, MPI.DOUBLE], FFlocal, root = 0)
     
     wwlocal = w.getArray()
     COMM.Scatterv([ww, sendcounts, MPI.DOUBLE], wwlocal, root = 0)
     
-    # FF = FFlocal
-    # w  = wwlocal 
-    # if RANK == 0:
-    # for i in range(len(FF)):
-    #     if FF[i] !=0:
-    #         print(i, FF[i], RANK)
+    FF = FFlocal
+    ww  = wwlocal 
     
-    # print(F.view())
-    # print(FFlocal)
-    # print(xx.array)
-    # import sys; sys.exit()
-    
-    # return FF
-    
+    print(w.view())
     
 F = daa.createGlobalVector()
 
