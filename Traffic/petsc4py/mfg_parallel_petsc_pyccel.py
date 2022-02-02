@@ -31,7 +31,7 @@ EPS=0.45
 ####################### grid's inputs
 multip=6 # mutiple for interpolation
 tol = 1e-6
-Nx=3; Nt=5; use_interp = 0 # spatial-temporal grid sizes, use interpolation
+Nx=2; Nt=5; use_interp = 0 # spatial-temporal grid sizes, use interpolation
 
 if use_interp :
     Nx=Nx*multip; Nt=Nt*multip
@@ -61,8 +61,8 @@ da = PETSc.DMDA().create(dim = 2,
 
 da.setFromOptions()
 da.setUp()
-Ntloc = da.getRanges()[0][1] - da.getRanges()[0][0]
-Nxloc = da.getRanges()[1][1] - da.getRanges()[1][0]
+Ntloc = da.getRanges()[0][1] - da.getRanges()[0][0] + 1
+Nxloc = da.getRanges()[1][1] - da.getRanges()[1][0] + 1 
 
 daa = PETSc.DMDA().create(dim = 1,
                          boundary_type=(PETSc.DMDA.BoundaryType.NONE,),
@@ -84,25 +84,22 @@ def formInitguess(snes, w):
 
 def formJacobian(snes, w, J, P):
     
-    print(w.view())
+    sendcounts = np.array(COMM.allgather(len(w.array)))
     
-    ww = w.array    
-    sendcounts = np.array(COMM.allgather(len(ww)))
+    ww = np.empty(sum(sendcounts), dtype=np.double)
     
-    if RANK == 0:
-        recvbuf1 = np.empty(sum(sendcounts), dtype=np.double)
-    else:
-        recvbuf1 = None
+    COMM.Allgatherv(sendbuf=w.array, recvbuf=(ww, sendcounts))  
     
-    COMM.Gatherv(sendbuf=ww, recvbuf=(recvbuf1, sendcounts), root=0)  
+    # if RANK == 0:
+    #     for i in range(len(ww)):
+    #         print("ww =", "{:.2f}".format(ww[i]), i)
     
-    ww = COMM.bcast(recvbuf1, root=0)
-   
+    # print("len",len(row))
     compute_jacobian(ww, row, col, data, Nt, Nx, dt, dx, eps, np.array(da.ranges))
     
     P.setType("mpiaij")
     P.setFromOptions()
-    P.setPreallocationNNZ(10)
+    P.setPreallocationNNZ(20)
     P.setOption(option=19, flag=0)
     
     for i in range(len(data)):
@@ -113,48 +110,73 @@ def formJacobian(snes, w, J, P):
     if J != P:
         J.assemble()
         
-    print(P.view())
-    import sys; sys.exit()
+    # print(w.view())
+    # print(P.view())
+    # import sys; sys.exit()
             
     return PETSc.Mat.Structure.SAME_NONZERO_PATTERN
 
-def my_sum(aa, bb, mpi_datatype):
-    a = np.frombuffer(aa, dtype=np.double)
-    b = np.frombuffer(bb, dtype=np.double)
+def my_sum(a, b, mpi_datatype):
+    # a = np.frombuffer(aa, dtype=np.double)
+    # b = np.frombuffer(bb, dtype=np.double)
+    
+    # bb = max(abs(a), abs(b))
     for i in range(len(a)):
+        # b[i] = max(abs(a[i]), abs(b[i]))
         if abs(a[i]) > abs(b[i]):
             b[i] = a[i]
-        if abs(a[i]) > abs(b[i]):
+        
+        elif abs(a[i]) < abs(b[i]):
             b[i] = b[i]
-
+            
+        else:
+            b[i] = b[i]
+            
 my_op = MPI.Op.Create(my_sum)
 # """************************ solve in grid 1***************************** """
 def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x):
     
-    FF = F.getArray()
-    ww = w.getArray()
+    # FF = F.getArray()
+    # ww = w.getArray()
     
-    sendcounts = np.array(COMM.allgather(len(ww)))
     
-    if RANK == 0:
-        recvbuf1 = np.empty(sum(sendcounts), dtype=np.double)
-        recvbuf2 = np.empty(sum(sendcounts), dtype=np.double)
-    else:
-        recvbuf1 = None
-        recvbuf2 = None
+    sendcounts = np.array(COMM.allgather(len(w.array)))
+    
+    ww = np.empty(sum(sendcounts), dtype=np.double)
+    FF = np.empty(sum(sendcounts), dtype=np.double)
+    
+    COMM.Allgatherv(sendbuf=w.array, recvbuf=(ww, sendcounts))  
+    COMM.Allgatherv(sendbuf=F.array, recvbuf=(FF, sendcounts))  
+    
+    # if RANK == 0:
+    #     recvbuf1 = np.zeros(sum(sendcounts), dtype=np.double)
+    #     recvbuf2 = np.zeros(sum(sendcounts), dtype=np.double)
+    # else:
+    #     recvbuf1 = None
+    #     recvbuf2 = None
         
     
-    COMM.Gatherv(sendbuf=ww, recvbuf=(recvbuf1, sendcounts), root=0)  
-    COMM.Gatherv(sendbuf=FF, recvbuf=(recvbuf2, sendcounts), root=0)
+    # COMM.Gatherv(sendbuf=ww, recvbuf=(recvbuf1, sendcounts), root=0)  
+    # COMM.Gatherv(sendbuf=FF, recvbuf=(recvbuf2, sendcounts), root=0)
 
-    ww = COMM.bcast(recvbuf1, root=0)
-    FF = COMM.bcast(recvbuf2, root=0)
-    # print(w.view())
+    # wwGlobal = COMM.bcast(recvbuf1, root=0)
+    # FFGlobal = COMM.bcast(recvbuf2, root=0)
+    
+    
+    # if RANK == 0:
+    #     print(ww)
+    
     
     compute_FF(ww, FF, Nt, Nx, dt, dx, eps, u_max, rho_jam, x, np.array(da.ranges), RANK)
+    # print("ff =", "{:.2f}".format(FF[0]), 0, RANK)
+    # if RANK == 0:
+    #     for i in range(len(FF)):
+    #         if FF[i] != 0:
+    #             print(FF[i], i, RANK)
+    
     totals = np.zeros_like(FF)
     
-    # # use MPI to get the totals 
+    # use MPI to get the totals 
     COMM.Allreduce(
         [FF, MPI.DOUBLE],
         [totals, MPI.DOUBLE],
@@ -162,27 +184,51 @@ def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x):
     )
     FF = totals
     
-    totals = np.zeros_like(ww)
+    # if RANK == 0:
+    #     for i in range(len(FF)):
+    #         print("ff =", "{:.2f}".format(FF[i]), i)
+   
+    
+    # # if RANK == 0:
+    # for i in range(len(FFGlobal)):
+    #     if FFGlobal[i] != 0:
+    #         print(i, FFGlobal[i])
+    
+    # print("\n")
+    # totals = np.zeros_like(ww)
+    
     # # use MPI to get the totals 
-    COMM.Allreduce(
-        [ww, MPI.DOUBLE],
-        [totals, MPI.DOUBLE],
-        op = my_op,
-    )
-    ww = totals
+    # COMM.Allreduce(
+    #     [ww, MPI.DOUBLE],
+    #     [totals, MPI.DOUBLE],
+    #     op = my_op,
+    # )
+    # ww = totals
     
     FFlocal = F.getArray()
     COMM.Scatterv([FF, sendcounts, MPI.DOUBLE], FFlocal, root = 0)
     
-    wwlocal = w.getArray()
-    COMM.Scatterv([ww, sendcounts, MPI.DOUBLE], wwlocal, root = 0)
     
-    FF = FFlocal
-    ww  = wwlocal 
     
-    print(w.view())
+    # wwlocal = w.getArray()
+    # COMM.Scatterv([ww, sendcounts, MPI.DOUBLE], wwlocal, root = 0)
+    
+    # FF = FFlocal
+    # ww  = wwlocal 
+    
+
+    
+    # print(w.view())
+    # print(F.view())
+    
+    
+    # import sys; sys.exit()
     
 F = daa.createGlobalVector()
+# F = PETSc.Vec()
+# F.create()
+# F.setSizes(3*Nt*Nx+2*Nx)
+# F.setFromOptions()
 
 args = [Nt, Nx, dt, dx, eps, u_max, rho_jam, x]
 snes.setFunction(formFunction, F, args)
@@ -208,7 +254,9 @@ snes.solve(b, xx)
 t1 = time.process_time()   ###
 time2=t1-t0
 
+# print(snes.view())
 
+print(xx.view())
 if RANK == 0:
     print("Time spent:",time2)
     its = snes.getIterationNumber()
