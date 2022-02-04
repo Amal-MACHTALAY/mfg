@@ -23,7 +23,7 @@ EPS=0.45
 ####################### grid's inputs
 multip=3 # mutiple for interpolation
 tol = 1e-6
-Nx=15; Nt=5; use_interp = 0 # spatial-temporal grid sizes, use interpolation
+Nx=2; Nt=5; use_interp = 0 # spatial-temporal grid sizes, use interpolation
 if use_interp :
     Nx=Nx*multip; Nt=Nt*multip
 dx=L/Nx # spatial step size
@@ -44,15 +44,13 @@ def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x):
     FF = F.array
     w = w.array
     
-    compute_FF(w, FF, Nt, Nx, dt, dx, eps, u_max, rho_jam, x)
+    compute_FF(w, FF, Nt, Nx, dt, dx, eps, u_max, rho_jam, x, np.array([[0, Nt],[0, Nx]]), 0)
 
 row = np.zeros(10*Nt*Nx+2*Nx, dtype=np.int64); col = np.zeros(10*Nt*Nx+2*Nx, dtype=np.int64); data = np.zeros(10*Nt*Nx+2*Nx);
 def formJacobian(snes, w, J, P):
     # P.zeroEntries()
     
-    print(P.getSize())
-    
-    compute_jacobian(w.array, row, col, data, Nt, Nx, dt, dx, eps)
+    compute_jacobian(w.array, row, col, data, Nt, Nx, dt, dx, eps, np.array([[0, Nt],[0, Nx]]))
     
     P.setType("mpiaij")
     P.setFromOptions()
@@ -65,7 +63,8 @@ def formJacobian(snes, w, J, P):
     
     P.assemble()
     
-    # print(P.view())
+    print(P.view())
+
     if J != P:
         J.assemble()
             

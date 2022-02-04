@@ -9,8 +9,8 @@ import numpy as np
 import time
 from modules import (compute_jacobian, compute_FF)
 from tools import initialguess
-# from psydac.ddm.partition import mpi_compute_dims
 
+# -ksp_type gmres -pc_type lu -ksp_monitor -snes_converged_reason -ksp_converged_reason
 # import time
 from mpi4py import MPI
 
@@ -31,7 +31,7 @@ EPS=0.45
 ####################### grid's inputs
 multip=6 # mutiple for interpolation
 tol = 1e-6
-Nx=2; Nt=5; use_interp = 0 # spatial-temporal grid sizes, use interpolation
+Nx=10; Nt=4; use_interp = 0 # spatial-temporal grid sizes, use interpolation
 
 if use_interp :
     Nx=Nx*multip; Nt=Nt*multip
@@ -46,9 +46,17 @@ x=np.linspace(0,L,Nx+1)
 t=np.arange(0,T+dt,dt)
 Nt=len(t)-1
 
+if RANK == 0:
+    print('Nx={Nx}, Nt={Nt}'.format(Nx=Nx,Nt=Nt))
+    print('dx={dx}, dt={dt}'.format(dx=round(dx,4),dt=round(dt,4)))
+
 shap=(Nt, Nx)
 
+import petsc4py
+import sys
+petsc4py.init(sys.argv)
 from petsc4py import PETSc
+
 
 t0 = time.process_time()   ###
 
@@ -74,107 +82,59 @@ daa.setUp()
 snes.setDM(daa)
 
 
-
 row = np.zeros(10*Ntloc*Nxloc+2*Nxloc, dtype=np.int64); col = np.zeros(10*Ntloc*Nxloc+2*Nxloc, dtype=np.int64); 
-data = np.zeros(10*Ntloc*Nxloc+2*Nxloc);
+data = np.zeros(10*Ntloc*Nxloc+2*Nxloc, np.double);
 
 def formInitguess(snes, w):
     
     w.array = initialguess(Nt, Nx, multip)
 
-def formJacobian(snes, w, J, P):
+def formJacobian(snes, w, J, P, sendcounts, ww):
     
-    sendcounts = np.array(COMM.allgather(len(w.array)))
-    
-    ww = np.empty(sum(sendcounts), dtype=np.double)
+    J.zeroEntries()
     
     COMM.Allgatherv(sendbuf=w.array, recvbuf=(ww, sendcounts))  
     
-    # if RANK == 0:
-    #     for i in range(len(ww)):
-    #         print("ww =", "{:.2f}".format(ww[i]), i)
-    
-    # print("len",len(row))
     compute_jacobian(ww, row, col, data, Nt, Nx, dt, dx, eps, np.array(da.ranges))
     
-    P.setType("mpiaij")
-    P.setFromOptions()
-    P.setPreallocationNNZ(20)
-    P.setOption(option=19, flag=0)
-    
     for i in range(len(data)):
-        P.setValues(row[i], col[i], data[i], addv=False)
-        
-    P.assemble()
+        J.setValues(row[i], col[i], data[i], addv=False)
     
-    if J != P:
-        J.assemble()
-        
-    # print(w.view())
-    # print(P.view())
-    # import sys; sys.exit()
-            
+    J.assemblyBegin(P.AssemblyType.FINAL)
+    J.assemblyEnd(P.AssemblyType.FINAL)
+
+    
+    if P != J:
+        P.assemblyBegin(P.AssemblyType.FINAL)
+        P.assemblyEnd(P.AssemblyType.FINAL)
+    
     return PETSc.Mat.Structure.SAME_NONZERO_PATTERN
 
 def my_sum(a, b, mpi_datatype):
-    # a = np.frombuffer(aa, dtype=np.double)
-    # b = np.frombuffer(bb, dtype=np.double)
-    
-    # bb = max(abs(a), abs(b))
     for i in range(len(a)):
-        # b[i] = max(abs(a[i]), abs(b[i]))
         if abs(a[i]) > abs(b[i]):
             b[i] = a[i]
-        
         elif abs(a[i]) < abs(b[i]):
             b[i] = b[i]
-            
         else:
             b[i] = b[i]
             
 my_op = MPI.Op.Create(my_sum)
 # """************************ solve in grid 1***************************** """
-def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x):
+def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x, sendcounts):
     
-    # FF = F.getArray()
-    # ww = w.getArray()
-    
-    
-    sendcounts = np.array(COMM.allgather(len(w.array)))
-    
+    t1 = time.process_time()   ###
+
     ww = np.empty(sum(sendcounts), dtype=np.double)
     FF = np.empty(sum(sendcounts), dtype=np.double)
     
     COMM.Allgatherv(sendbuf=w.array, recvbuf=(ww, sendcounts))  
-    COMM.Allgatherv(sendbuf=F.array, recvbuf=(FF, sendcounts))  
-    
-    # if RANK == 0:
-    #     recvbuf1 = np.zeros(sum(sendcounts), dtype=np.double)
-    #     recvbuf2 = np.zeros(sum(sendcounts), dtype=np.double)
-    # else:
-    #     recvbuf1 = None
-    #     recvbuf2 = None
-        
-    
-    # COMM.Gatherv(sendbuf=ww, recvbuf=(recvbuf1, sendcounts), root=0)  
-    # COMM.Gatherv(sendbuf=FF, recvbuf=(recvbuf2, sendcounts), root=0)
 
-    # wwGlobal = COMM.bcast(recvbuf1, root=0)
-    # FFGlobal = COMM.bcast(recvbuf2, root=0)
-    
-    
-    # if RANK == 0:
-    #     print(ww)
-    
-    
     compute_FF(ww, FF, Nt, Nx, dt, dx, eps, u_max, rho_jam, x, np.array(da.ranges), RANK)
-    # print("ff =", "{:.2f}".format(FF[0]), 0, RANK)
-    # if RANK == 0:
-    #     for i in range(len(FF)):
-    #         if FF[i] != 0:
-    #             print(FF[i], i, RANK)
     
-    totals = np.zeros_like(FF)
+    t2 = time.process_time()   ###
+    print(t2 - t1)
+    totals = np.empty(sum(sendcounts), dtype=np.double)
     
     # use MPI to get the totals 
     COMM.Allreduce(
@@ -184,79 +144,51 @@ def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x):
     )
     FF = totals
     
-    # if RANK == 0:
-    #     for i in range(len(FF)):
-    #         print("ff =", "{:.2f}".format(FF[i]), i)
-   
-    
-    # # if RANK == 0:
-    # for i in range(len(FFGlobal)):
-    #     if FFGlobal[i] != 0:
-    #         print(i, FFGlobal[i])
-    
-    # print("\n")
-    # totals = np.zeros_like(ww)
-    
-    # # use MPI to get the totals 
-    # COMM.Allreduce(
-    #     [ww, MPI.DOUBLE],
-    #     [totals, MPI.DOUBLE],
-    #     op = my_op,
-    # )
-    # ww = totals
-    
-    FFlocal = F.getArray()
-    COMM.Scatterv([FF, sendcounts, MPI.DOUBLE], FFlocal, root = 0)
-    
-    
-    
-    # wwlocal = w.getArray()
-    # COMM.Scatterv([ww, sendcounts, MPI.DOUBLE], wwlocal, root = 0)
-    
-    # FF = FFlocal
-    # ww  = wwlocal 
-    
-
-    
-    # print(w.view())
-    # print(F.view())
-    
-    
-    # import sys; sys.exit()
+    COMM.Scatterv([FF, sendcounts, MPI.DOUBLE], F.array, root = 0)
     
 F = daa.createGlobalVector()
-# F = PETSc.Vec()
-# F.create()
-# F.setSizes(3*Nt*Nx+2*Nx)
-# F.setFromOptions()
+sendcounts = np.array(COMM.allgather(len(F.array)))
+ww = np.empty(sum(sendcounts), dtype=np.double)
 
-args = [Nt, Nx, dt, dx, eps, u_max, rho_jam, x]
+
+
+args = [Nt, Nx, dt, dx, eps, u_max, rho_jam, x, sendcounts]
 snes.setFunction(formFunction, F, args)
-snes.setJacobian(formJacobian)#, mat, mat)
 
+mat = PETSc.Mat().create()
+mat.setSizes((3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx))
+mat.setType("mpiaij")
+mat.setFromOptions()
+mat.setPreallocationNNZ(100)
+
+args = [sendcounts, ww]
+snes.setJacobian(formJacobian, mat, mat, args)
+# # snes.setUseMF(True)
 b = None
 xx = daa.createGlobalVector()
 
+
 ksp = snes.getKSP()
+ksp = PETSc.KSP().create()
 pc = ksp.getPC()
 pc.setFactorSolverType("mumps")
 opts = PETSc.Options()
-opts["ksp_rtol"] = tol
+ksp.setTolerances(rtol=tol)
 opts["pc_type"] = "lu"
+opts["mat_mumps_icntl_23"] = 1000
 ksp.setInitialGuessNonzero(True)
 ksp.setFromOptions()
 
 
+# snes.setUseMF(True)
 snes.setTolerances(rtol = tol)
 snes.setFromOptions()
+
 
 snes.solve(b, xx)
 t1 = time.process_time()   ###
 time2=t1-t0
 
-# print(snes.view())
-
-print(xx.view())
 if RANK == 0:
     print("Time spent:",time2)
     its = snes.getIterationNumber()
@@ -265,7 +197,7 @@ if RANK == 0:
     print ("Number of SNES iterations = :", its)
     print ("Number of Linear iterations =" , lits)
     
-# print(xx.view())
+print(xx.view())
 
 # litspit = lits/float(its)
 # print ("Average Linear its / SNES = %e", float(litspit))

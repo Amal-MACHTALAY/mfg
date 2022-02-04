@@ -144,24 +144,10 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',
                      Nt:'int', Nx:'int', dt:'float', dx:'float', eps:'float', ranges:'int[:,:]'):
     
     cmpt = 0
-    # print("ranges", ranges[0][0], ranges[0][1], ranges[1][0]+1, ranges[1][1]+1)
-    # for n in range(0, ranges[0][1]):
-    #     for j in range(1,ranges[1][1]+1): # 1,Nx-1
+    row[:] = 0; col[:] = 0; data[:] = 0.
     
-    # for n in range(0,Nt):
-    #     for j in range(1,Nx+1): # 1,Nx+1
-    row[:] = 0; col[:] = 0; data[:] = 0
-    for n in range(ranges[0][0], ranges[0][1]):
+    for n in range(ranges[0][0], ranges[0][1]): #0, Nt
         for j in range(ranges[1][0], ranges[1][1]): # 0,Nx
-            if j==1:
-                row[cmpt] = Fr_idx(j,n,Nt); col[cmpt] = r_idx(Nx,n,Nt); data[cmpt] = (0.5*dt/dx)*w[u_idx(Nx,n,Nt,Nx)]-0.5
-                cmpt +=1
-                row[cmpt] = Fr_idx(j,n,Nt); col[cmpt] = u_idx(Nx,n,Nt,Nx); data[cmpt] = -(0.5*dt/dx)*w[r_idx(Nx,n,Nt)]
-                cmpt +=1
-                row[cmpt] = FV_idx(j,n,Nt,Nx); col[cmpt] = V_idx(Nx,n+1,Nt,Nx); data[cmpt] = eps
-                cmpt +=1
-                
-            
             if j != 0:
                 row[cmpt] = Fr_idx(j,n,Nt); col[cmpt] = r_idx(j,n+1,Nt); data[cmpt] = 1
                 cmpt +=1
@@ -171,7 +157,7 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',
                 cmpt +=1
                 row[cmpt] = FV_idx(j,n,Nt,Nx); col[cmpt] = V_idx(j,n+1,Nt,Nx); data[cmpt] = 1-2*eps
                 cmpt +=1
-
+                
                 if j!=1:
                     row[cmpt] = Fr_idx(j,n,Nt); col[cmpt] = r_idx(j-1,n,Nt); data[cmpt] = -(0.5*dt/dx)*w[u_idx(j-1,n,Nt,Nx)]-0.5
                     cmpt +=1
@@ -179,11 +165,17 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',
                     cmpt +=1
                     row[cmpt] = FV_idx(j,n,Nt,Nx); col[cmpt] = V_idx(j-1,n+1,Nt,Nx); data[cmpt] = eps
                     cmpt +=1
-                    
-                if j!=Nx:
-                    # print("toto", n, j, Nx, Nt, (0.5*dt/dx)*w[u_idx(j+1,n,Nt,Nx)]-0.5,(0.5*dt/dx)*w[r_idx(j+1,n,Nt)], eps )
-                    # print(r_idx(j+1,n,Nt), u_idx(j+1,n,Nt,Nx), V_idx(j+1,n+1,Nt,Nx) )
-                    
+                
+                elif j==1:
+                    row[cmpt] = Fr_idx(j,n,Nt); col[cmpt] = r_idx(Nx,n,Nt); data[cmpt] = (0.5*dt/dx)*w[u_idx(Nx,n,Nt,Nx)]-0.5
+                    cmpt +=1
+                    row[cmpt] = Fr_idx(j,n,Nt); col[cmpt] = u_idx(Nx,n,Nt,Nx); data[cmpt] = -(0.5*dt/dx)*w[r_idx(Nx,n,Nt)]
+                    cmpt +=1
+                    row[cmpt] = FV_idx(j,n,Nt,Nx); col[cmpt] = V_idx(Nx,n+1,Nt,Nx); data[cmpt] = eps
+                    cmpt +=1
+
+                elif j!=Nx:
+                
                     row[cmpt] = Fr_idx(j,n,Nt); col[cmpt] = r_idx(j+1,n,Nt); data[cmpt] = (0.5*dt/dx)*w[u_idx(j+1,n,Nt,Nx)]-0.5
                     cmpt +=1
                     row[cmpt] = Fr_idx(j,n,Nt); col[cmpt] = u_idx(j+1,n,Nt,Nx); data[cmpt] = (0.5*dt/dx)*w[r_idx(j+1,n,Nt)]
@@ -220,6 +212,7 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',
             cmpt +=1
             row[cmpt] = FVter_idx(j,Nt,Nx); col[cmpt] = V_idx(j,Nt,Nt,Nx); data[cmpt] = 1
             cmpt +=1
+            
      
 def compute_FF(w:'float[:]', FF:'float[:]', Nt:'int', Nx:'int', dt:'float', dx:'float', eps:'float',
                u_max:'float', rho_jam:'float', x:'float[:]', ranges:'int[:,:]', RANK:'int'):
@@ -267,15 +260,15 @@ def compute_FF(w:'float[:]', FF:'float[:]', Nt:'int', Nx:'int', dt:'float', dx:'
             # F_V_ter , F[3*Nt*Nx+Nx+1]->F[3*Nt*Nx+2*Nx-2] ********* 14
             FF[FVter_idx(j,Nt,Nx)]=w[V_idx(j,Nt,Nt,Nx)]-VT(x[j])
             
-    # if RANK == 0:
-    # F_rho_int , F[3*Nt*Nx] ********* 10
-    FF[Frint_idx(1,Nt,Nx)]=w[r_idx(1,0,Nt)]-(1/dx)*integrate_rho_int_v2(x[0],x[1])
-    # F_rho_int , F[3*Nt*Nx+Nx-1] ********* 12
-    FF[Frint_idx(Nx,Nt,Nx)]=w[r_idx(Nx,0,Nt)]-(1/dx)*integrate_rho_int_v2(x[Nx-1],x[Nx])
-    # F_V_ter , F[3*Nt*Nx+Nx] *********** 13 
-    FF[FVter_idx(1,Nt,Nx)]=w[V_idx(1,Nt,Nt,Nx)]-VT(x[1])
-    # F_V_ter , F[3*Nt*Nx+2*Nx-1] ************** 15
-    FF[FVter_idx(Nx,Nt,Nx)]=w[V_idx(Nx,Nt,Nt,Nx)]-VT(x[Nx])
+    if RANK == 0:
+        # F_rho_int , F[3*Nt*Nx] ********* 10
+        FF[Frint_idx(1,Nt,Nx)]=w[r_idx(1,0,Nt)]-(1/dx)*integrate_rho_int_v2(x[0],x[1])
+        # F_rho_int , F[3*Nt*Nx+Nx-1] ********* 12
+        FF[Frint_idx(Nx,Nt,Nx)]=w[r_idx(Nx,0,Nt)]-(1/dx)*integrate_rho_int_v2(x[Nx-1],x[Nx])
+        # F_V_ter , F[3*Nt*Nx+Nx] *********** 13 
+        FF[FVter_idx(1,Nt,Nx)]=w[V_idx(1,Nt,Nt,Nx)]-VT(x[1])
+        # F_V_ter , F[3*Nt*Nx+2*Nx-1] ************** 15
+        FF[FVter_idx(Nx,Nt,Nx)]=w[V_idx(Nx,Nt,Nt,Nx)]-VT(x[Nx])
 
     # # for i in range(len(FF)):
     # #     print(FF[i])
