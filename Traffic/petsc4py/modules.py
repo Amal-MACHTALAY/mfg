@@ -213,62 +213,77 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',
             row[cmpt] = FVter_idx(j,Nt,Nx); col[cmpt] = V_idx(j,Nt,Nt,Nx); data[cmpt] = 1
             cmpt +=1
             
-     
+
 def compute_FF(w:'float[:]', FF:'float[:]', Nt:'int', Nx:'int', dt:'float', dx:'float', eps:'float',
                u_max:'float', rho_jam:'float', x:'float[:]', ranges:'int[:,:]', RANK:'int'):
+    
+    Ntloc=ranges[0][1]-ranges[0][0]+1
+    Nxloc=ranges[1][1]-ranges[1][0]+1
     
     FF[:] = 0.
     # for n in range(0,Nt):
     for n in range(ranges[0][0], ranges[0][1]):
-        # F_rho , F[0]->F[Nt-1] ************** 1  
-        FF[Fr_idx(1,n,Nt)]=w[r_idx(1,n+1,Nt)]-0.5*(w[r_idx(Nx,n,Nt)]+w[r_idx(2,n,Nt)])\
-            +(0.5*dt/dx)*(w[r_idx(2,n,Nt)]*w[u_idx(2,n,Nt,Nx)]-w[r_idx(Nx,n,Nt)]*w[u_idx(Nx,n,Nt,Nx)])
-        # F_rho , F[Nt*Nx-Nt]->F[Nt*Nx-1] ********** 3 
-        FF[Fr_idx(Nx,n,Nt)]=w[r_idx(Nx,n+1,Nt)]-0.5*(w[r_idx(Nx-1,n,Nt)]+w[r_idx(1,n,Nt)])\
-            +(0.5*dt/dx)*(w[r_idx(1,n,Nt)]*w[u_idx(1,n,Nt,Nx)]-w[r_idx(Nx-1,n,Nt)]*w[u_idx(Nx-1,n,Nt,Nx)])
-        # F_u , F[Nt*Nx]->F[Nt*Nx+Nt-1] *********** 4 
-        FF[Fu_idx(1,n,Nt,Nx)]=w[u_idx(1,n,Nt,Nx)]-f_star_p((w[V_idx(1,n+1,Nt,Nx)]-w[V_idx(Nx,n+1,Nt,Nx)])/dx,w[r_idx(1,n,Nt)], u_max, rho_jam )
-        # F_u , F[2*Nt*Nx-Nt]->F[2*Nt*Nx-1] ********* 6 
-        FF[Fu_idx(Nx,n,Nt,Nx)]=w[u_idx(Nx,n,Nt,Nx)]-f_star_p((w[V_idx(Nx,n+1,Nt,Nx)]-w[V_idx(Nx-1,n+1,Nt,Nx)])/dx,w[r_idx(Nx,n,Nt)], u_max, rho_jam)
-        # F_V , F[2*Nt*Nx]->F[2*Nt*Nx+Nt-1] *********** 7 
-        FF[FV_idx(1,n,Nt,Nx)]=w[V_idx(1,n+1,Nt,Nx)]-w[V_idx(1,n,Nt,Nx)]\
-            +dt*f_star((w[V_idx(1,n+1,Nt,Nx)]-w[V_idx(Nx,n+1,Nt,Nx)])/dx, w[r_idx(1,n,Nt)], u_max, rho_jam)\
-            +eps*(w[V_idx(2,n+1,Nt,Nx)]-2*w[V_idx(1,n+1,Nt,Nx)]+w[V_idx(Nx,n+1,Nt,Nx)])
-        # F_V , F[3*Nt*Nx-Nt]->F[3*Nt*Nx-1] ********** 9 
-        FF[FV_idx(Nx,n,Nt,Nx)]=w[V_idx(Nx,n+1,Nt,Nx)]-w[V_idx(Nx,n,Nt,Nx)]\
-            +dt*f_star((w[V_idx(Nx,n+1,Nt,Nx)]-w[V_idx(Nx-1,n+1,Nt,Nx)])/dx, w[r_idx(Nx,n,Nt)], u_max, rho_jam)\
-            +eps*(w[V_idx(1,n+1,Nt,Nx)]-2*w[V_idx(Nx,n+1,Nt,Nx)]+w[V_idx(Nx-1,n+1,Nt,Nx)])
+        N=n-ranges[0][0]
+        j=ranges[1][0]+1
+        if j==1:
+            J=j-ranges[1][0]
+            # F_rho , F[0]->F[Nt-1] ************** 1  
+            FF[Fr_idx(J,N,Ntloc)]=w[r_idx(1,n+1,Nt)]-0.5*(w[r_idx(Nx,n,Nt)]+w[r_idx(2,n,Nt)])\
+                +(0.5*dt/dx)*(w[r_idx(2,n,Nt)]*w[u_idx(2,n,Nt,Nx)]-w[r_idx(Nx,n,Nt)]*w[u_idx(Nx,n,Nt,Nx)])
+            # F_u , F[Nt*Nx]->F[Nt*Nx+Nt-1] *********** 4 
+            FF[Fu_idx(J,N,Ntloc,Nxloc)]=w[u_idx(1,n,Nt,Nx)]-f_star_p((w[V_idx(1,n+1,Nt,Nx)]-w[V_idx(Nx,n+1,Nt,Nx)])/dx,w[r_idx(1,n,Nt)], u_max, rho_jam )
+            # F_V , F[2*Nt*Nx]->F[2*Nt*Nx+Nt-1] *********** 7 
+            FF[FV_idx(J,N,Ntloc,Nxloc)]=w[V_idx(1,n+1,Nt,Nx)]-w[V_idx(1,n,Nt,Nx)]\
+                +dt*f_star((w[V_idx(1,n+1,Nt,Nx)]-w[V_idx(Nx,n+1,Nt,Nx)])/dx, w[r_idx(1,n,Nt)], u_max, rho_jam)\
+                +eps*(w[V_idx(2,n+1,Nt,Nx)]-2*w[V_idx(1,n+1,Nt,Nx)]+w[V_idx(Nx,n+1,Nt,Nx)])
+        j==ranges[1][1]
+        if j==Nx:
+            J=j-ranges[1][0]
+            # F_rho , F[Nt*Nx-Nt]->F[Nt*Nx-1] ********** 3 
+            FF[Fr_idx(J,N,Ntloc)]=w[r_idx(Nx,n+1,Nt)]-0.5*(w[r_idx(Nx-1,n,Nt)]+w[r_idx(1,n,Nt)])\
+                +(0.5*dt/dx)*(w[r_idx(1,n,Nt)]*w[u_idx(1,n,Nt,Nx)]-w[r_idx(Nx-1,n,Nt)]*w[u_idx(Nx-1,n,Nt,Nx)])
+            # F_u , F[2*Nt*Nx-Nt]->F[2*Nt*Nx-1] ********* 6 
+            FF[Fu_idx(J,N,Ntloc,Nxloc)]=w[u_idx(Nx,n,Nt,Nx)]-f_star_p((w[V_idx(Nx,n+1,Nt,Nx)]-w[V_idx(Nx-1,n+1,Nt,Nx)])/dx,w[r_idx(Nx,n,Nt)], u_max, rho_jam)
+            # F_V , F[3*Nt*Nx-Nt]->F[3*Nt*Nx-1] ********** 9 
+            FF[FV_idx(J,N,Ntloc,Nxloc)]=w[V_idx(Nx,n+1,Nt,Nx)]-w[V_idx(Nx,n,Nt,Nx)]\
+                +dt*f_star((w[V_idx(Nx,n+1,Nt,Nx)]-w[V_idx(Nx-1,n+1,Nt,Nx)])/dx, w[r_idx(Nx,n,Nt)], u_max, rho_jam)\
+                +eps*(w[V_idx(1,n+1,Nt,Nx)]-2*w[V_idx(Nx,n+1,Nt,Nx)]+w[V_idx(Nx-1,n+1,Nt,Nx)])
     # for j in range(2,Nx):
     #     for n in range(0,Nt):
             
     for j in range(ranges[1][0], ranges[1][1]): # 2,Nx
+        J=j-ranges[1][0]
         if j != 0 and j != 1:
             for n in range(ranges[0][0], ranges[0][1]):
-           
+                N=n-ranges[0][0]
                 # F_rho , F[Nt]->F[Nt*Nx-Nt-1] ************ 2 
-                FF[Fr_idx(j,n,Nt)]=w[r_idx(j,n+1,Nt)]-0.5*(w[r_idx(j-1,n,Nt)]+w[r_idx(j+1,n,Nt)])\
+                FF[Fr_idx(J,N,Ntloc)]=w[r_idx(j,n+1,Nt)]-0.5*(w[r_idx(j-1,n,Nt)]+w[r_idx(j+1,n,Nt)])\
                     +(0.5*dt/dx)*(w[r_idx(j+1,n,Nt)]*w[u_idx(j+1,n,Nt,Nx)]-w[r_idx(j-1,n,Nt)]*w[u_idx(j-1,n,Nt,Nx)])
                 # F_u , F[Nt*Nx+Nt]->F[2*Nt*Nx-Nt-1] *********** 5 
-                FF[Fu_idx(j,n,Nt,Nx)]=w[u_idx(j,n,Nt,Nx)]\
+                FF[Fu_idx(J,N,Ntloc,Nxloc)]=w[u_idx(j,n,Nt,Nx)]\
                     -f_star_p((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(j-1,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
                 # F_V , F[2*Nt*Nx+Nt]->F[3*Nt*Nx-Nt-1] ********* 8 
-                FF[FV_idx(j,n,Nt,Nx)]=w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(j,n,Nt,Nx)]\
+                FF[FV_idx(J,N,Ntloc,Nxloc)]=w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(j,n,Nt,Nx)]\
                     +dt*f_star((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(j-1,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)\
                     +eps*(w[V_idx(j+1,n+1,Nt,Nx)]-2*w[V_idx(j,n+1,Nt,Nx)]+w[V_idx(j-1,n+1,Nt,Nx)])
             # F_rho_int , F[3*Nt*Nx+1]->F[3*Nt*Nx+Nx-2] ********** 11
-            FF[Frint_idx(j,Nt,Nx)]=w[r_idx(j,0,Nt)]-(1/dx)*integrate_rho_int_v2(x[j-1],x[j])
+            FF[Frint_idx(J,Ntloc,Nxloc)]=w[r_idx(j,0,Nt)]-(1/dx)*integrate_rho_int_v2(x[j-1],x[j])
             # F_V_ter , F[3*Nt*Nx+Nx+1]->F[3*Nt*Nx+2*Nx-2] ********* 14
-            FF[FVter_idx(j,Nt,Nx)]=w[V_idx(j,Nt,Nt,Nx)]-VT(x[j])
+            FF[FVter_idx(J,Ntloc,Nxloc)]=w[V_idx(j,Nt,Nt,Nx)]-VT(x[j])
             
-    if RANK == 0:
+    # if RANK == 0:
+    j=ranges[1][0]+1 
+    if j==1:
         # F_rho_int , F[3*Nt*Nx] ********* 10
-        FF[Frint_idx(1,Nt,Nx)]=w[r_idx(1,0,Nt)]-(1/dx)*integrate_rho_int_v2(x[0],x[1])
-        # F_rho_int , F[3*Nt*Nx+Nx-1] ********* 12
-        FF[Frint_idx(Nx,Nt,Nx)]=w[r_idx(Nx,0,Nt)]-(1/dx)*integrate_rho_int_v2(x[Nx-1],x[Nx])
+        FF[Frint_idx(J,Ntloc,Nxloc)]=w[r_idx(1,0,Nt)]-(1/dx)*integrate_rho_int_v2(x[0],x[1])
         # F_V_ter , F[3*Nt*Nx+Nx] *********** 13 
-        FF[FVter_idx(1,Nt,Nx)]=w[V_idx(1,Nt,Nt,Nx)]-VT(x[1])
+        FF[FVter_idx(J,Ntloc,Nxloc)]=w[V_idx(1,Nt,Nt,Nx)]-VT(x[1])
+    j==ranges[1][1]
+    if j==Nx:
+        # F_rho_int , F[3*Nt*Nx+Nx-1] ********* 12
+        FF[Frint_idx(J,Ntloc,Nxloc)]=w[r_idx(Nx,0,Nt)]-(1/dx)*integrate_rho_int_v2(x[Nx-1],x[Nx])
         # F_V_ter , F[3*Nt*Nx+2*Nx-1] ************** 15
-        FF[FVter_idx(Nx,Nt,Nx)]=w[V_idx(Nx,Nt,Nt,Nx)]-VT(x[Nx])
+        FF[FVter_idx(J,Ntloc,Nxloc)]=w[V_idx(Nx,Nt,Nt,Nx)]-VT(x[Nx])
 
     # # for i in range(len(FF)):
     # #     print(FF[i])
