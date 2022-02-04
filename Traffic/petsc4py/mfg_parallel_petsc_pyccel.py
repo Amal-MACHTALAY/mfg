@@ -31,7 +31,7 @@ EPS=0.45
 ####################### grid's inputs
 multip=6 # mutiple for interpolation
 tol = 1e-6
-Nx=10; Nt=4; use_interp = 0 # spatial-temporal grid sizes, use interpolation
+Nx=20; Nt=4; use_interp = 0 # spatial-temporal grid sizes, use interpolation
 
 if use_interp :
     Nx=Nx*multip; Nt=Nt*multip
@@ -123,8 +123,6 @@ my_op = MPI.Op.Create(my_sum)
 # """************************ solve in grid 1***************************** """
 def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x, sendcounts):
     
-    t1 = time.process_time()   ###
-
     ww = np.empty(sum(sendcounts), dtype=np.double)
     FF = np.empty(sum(sendcounts), dtype=np.double)
     
@@ -132,8 +130,6 @@ def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x, sendcounts)
 
     compute_FF(ww, FF, Nt, Nx, dt, dx, eps, u_max, rho_jam, x, np.array(da.ranges), RANK)
     
-    t2 = time.process_time()   ###
-    print(t2 - t1)
     totals = np.empty(sum(sendcounts), dtype=np.double)
     
     # use MPI to get the totals 
@@ -149,8 +145,6 @@ def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x, sendcounts)
 F = daa.createGlobalVector()
 sendcounts = np.array(COMM.allgather(len(F.array)))
 ww = np.empty(sum(sendcounts), dtype=np.double)
-
-
 
 args = [Nt, Nx, dt, dx, eps, u_max, rho_jam, x, sendcounts]
 snes.setFunction(formFunction, F, args)
