@@ -200,6 +200,7 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',
             row[cmpt] = FV_idx(Nx,n,Nt,Nx); col[cmpt] = V_idx(1,n+1,Nt,Nx); data[cmpt] = eps
             cmpt +=1
                 
+            
     for j in range(ranges[1][0], ranges[1][1]+1):
         
         if j != 0 and j!=Nx:
@@ -236,7 +237,7 @@ def compute_FF(w:'float[:]', FF:'float[:]', Nt:'int', Nx:'int', dt:'float', dx:'
             FF[FV_idx(J,N,Ntloc,Nxloc)]=w[V_idx(1,n+1,Nt,Nx)]-w[V_idx(1,n,Nt,Nx)]\
                 +dt*f_star((w[V_idx(1,n+1,Nt,Nx)]-w[V_idx(Nx,n+1,Nt,Nx)])/dx, w[r_idx(1,n,Nt)], u_max, rho_jam)\
                 +eps*(w[V_idx(2,n+1,Nt,Nx)]-2*w[V_idx(1,n+1,Nt,Nx)]+w[V_idx(Nx,n+1,Nt,Nx)])
-        j==ranges[1][1]
+        j=ranges[1][1]
         if j==Nx:
             J=j-ranges[1][0]
             # F_rho , F[Nt*Nx-Nt]->F[Nt*Nx-1] ********** 3 
@@ -278,7 +279,7 @@ def compute_FF(w:'float[:]', FF:'float[:]', Nt:'int', Nx:'int', dt:'float', dx:'
         FF[Frint_idx(J,Ntloc,Nxloc)]=w[r_idx(1,0,Nt)]-(1/dx)*integrate_rho_int_v2(x[0],x[1])
         # F_V_ter , F[3*Nt*Nx+Nx] *********** 13 
         FF[FVter_idx(J,Ntloc,Nxloc)]=w[V_idx(1,Nt,Nt,Nx)]-VT(x[1])
-    j==ranges[1][1]
+    j=ranges[1][1]
     if j==Nx:
         # F_rho_int , F[3*Nt*Nx+Nx-1] ********* 12
         FF[Frint_idx(J,Ntloc,Nxloc)]=w[r_idx(Nx,0,Nt)]-(1/dx)*integrate_rho_int_v2(x[Nx-1],x[Nx])
