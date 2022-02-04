@@ -31,7 +31,7 @@ EPS=0.45
 ####################### grid's inputs
 multip=6 # mutiple for interpolation
 tol = 1e-6
-Nx=20; Nt=4; use_interp = 0 # spatial-temporal grid sizes, use interpolation
+Nx=15; Nt=60; use_interp = 0 # spatial-temporal grid sizes, use interpolation
 
 if use_interp :
     Nx=Nx*multip; Nt=Nt*multip
@@ -90,7 +90,7 @@ def formInitguess(snes, w):
     w.array = initialguess(Nt, Nx, multip)
 
 def formJacobian(snes, w, J, P, sendcounts, ww):
-    
+    # ts = time.process_time()###
     J.zeroEntries()
     
     COMM.Allgatherv(sendbuf=w.array, recvbuf=(ww, sendcounts))  
@@ -108,16 +108,22 @@ def formJacobian(snes, w, J, P, sendcounts, ww):
         P.assemblyBegin(P.AssemblyType.FINAL)
         P.assemblyEnd(P.AssemblyType.FINAL)
     
+    # te = time.process_time()###
+    
+    # times=te-ts
+    
+    # print(times, "Jacobian")
+
     return PETSc.Mat.Structure.SAME_NONZERO_PATTERN
 
-def my_sum(a, b, mpi_datatype):
+def my_sum(aa, bb, mpi_datatype):
+    a = np.frombuffer(aa, dtype=np.double)
+    b = np.frombuffer(bb, dtype=np.double)
+    
+    
     for i in range(len(a)):
         if abs(a[i]) > abs(b[i]):
             b[i] = a[i]
-        elif abs(a[i]) < abs(b[i]):
-            b[i] = b[i]
-        else:
-            b[i] = b[i]
             
 my_op = MPI.Op.Create(my_sum)
 # """************************ solve in grid 1***************************** """
@@ -132,15 +138,25 @@ def formFunction(snes, w, F, Nt, Nx, dt, dx, eps, u_max, rho_jam, x, sendcounts)
     
     totals = np.empty(sum(sendcounts), dtype=np.double)
     
+    # ts = time.process_time()###
+    
     # use MPI to get the totals 
-    COMM.Allreduce(
-        [FF, MPI.DOUBLE],
-        [totals, MPI.DOUBLE],
-        op = my_op,
-    )
+    req = COMM.Iallreduce(
+            [FF, MPI.DOUBLE],
+            [totals, MPI.DOUBLE],
+            op = my_op,
+            )
+    req.wait()
     FF = totals
     
+    # te = time.process_time()###
+    
+    # times=te-ts
+    
+    # print(times, daa.getOwnershipRanges())
+
     COMM.Scatterv([FF, sendcounts, MPI.DOUBLE], F.array, root = 0)
+    
     
 F = daa.createGlobalVector()
 sendcounts = np.array(COMM.allgather(len(F.array)))
