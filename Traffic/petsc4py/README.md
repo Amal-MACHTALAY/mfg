@@ -16,3 +16,22 @@ $ ./configure --with-debugging=0 --with-debugging=0 --download-p4est=1 --with-zl
 $ make PETSC_DIR=/path/to/petsc PETSC_ARCH=arch-linux-c-opt all
 ```
 
+```
+$ python3 -m pip install --user -e .
+```
+
+
+# Run mfg_parallel_petsc_pyccel.py
+
+```
+$ mpirun -n 2 python mfg_parallel_petsc_pyccel.py -pc_factor_mat_solver_type superlu_dist 
+```
+
+## Optional commands:
+
+- `-snes_linesearch_type l2` L2norm for linear search (used when the initial guess is activated)
+- `-snes_lag_jacobian -2` compute the jacobian only once
+- `-ksp_rmonitor` monitor for ksp solver
+- `-snes_monitor` monitor for snes sover
+- `-snes_converged_reason` convergence reason for snes solver
+- `-ksp_converged_reason` convergence reason for ksp solver
