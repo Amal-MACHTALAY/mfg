@@ -24,7 +24,7 @@ $ python3 -m pip install --user -e .
 # Run mfg_parallel_petsc_pyccel.py
 
 ```
-$ mpirun -n 2 python mfg_parallel_petsc_pyccel.py -pc_factor_mat_solver_type superlu_dist 
+$ mpirun -n 2 python mfg_parallel_petsc_pyccel.py -pc_factor_mat_solver_type mumps
 ```
 
 ## Optional commands:
