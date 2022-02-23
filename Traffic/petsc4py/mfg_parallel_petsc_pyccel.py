@@ -14,7 +14,7 @@ from tools import initialguess
 # mpirun -n 2 python mfg_parallel_petsc_pyccel.py -ksp_rmonitor -snes_converged_reason -ksp_converged_reason 
 # -snes_monitor -snes_linesearch_monitor -pc_factor_mat_solver_type superlu_dist -snes_lag_jacobian -2 -snes_lag_preconditioner -2 
 
-# mpirun -n 2 python mfg_parallel_petsc_pyccel.py -ksp_rmonitor -snes_converged_reason -ksp_converged_reason
+# mpirun --oversubscribe -n 8 python mfg_parallel_petsc_pyccel.py -ksp_rmonitor -snes_converged_reason -ksp_converged_reason
 # -snes_monitor -snes_linesearch_monitor -pc_factor_mat_solver_type superlu_dist -snes_linesearch_type l2 -snes_lag_jacobian -2
 
 
@@ -36,11 +36,11 @@ rho_a=0.05; rho_b=0.95; gama=0.1
 mu=0.0 # viscosity coefficient 
 EPS=0.45
 
-Nx=10; Nt=5; use_interp = 1 # spatial-temporal grid sizes, use interpolation
+Nx=15; Nt=60; use_interp = 1 # spatial-temporal grid sizes, use interpolation
 multip=2 # mutiple for interpolation
 tol = 1e-6
     
-for i in range(1, 4):
+for i in range(1, 3):
     if i == 1:
         use_interp = 0
     else:
@@ -95,12 +95,16 @@ for i in range(1, 4):
     snes.setDM(daa)
     
     
-    row = np.zeros(10*Ntloc*Nxloc+2*Nxloc, dtype=np.int64); col = np.zeros(10*Ntloc*Nxloc+2*Nxloc, dtype=np.int64); 
-    data = np.zeros(10*Ntloc*Nxloc+2*Nxloc, np.double);
+    row = np.zeros(14*Ntloc*Nxloc+2*Nxloc, dtype=np.int64); col = np.zeros(14*Ntloc*Nxloc+2*Nxloc, dtype=np.int64); 
+    data = np.zeros(14*Ntloc*Nxloc+2*Nxloc, np.double);
+    
+    # print(RANK,da.getRanges()[0][0], da.getRanges()[0][1],da.getRanges()[1][0], da.getRanges()[1][1],Ntloc,Nxloc,Nt,Nx)
     
     def formInitguess(snes, w, sendcounts, ww):
         if RANK == 0:
             ww = initialguess(Nt, Nx, multip)
+            # print(len(ww),3*Nt*Nx+2*Nx)
+            # print(ww[:10])
         COMM.Scatterv([ww, sendcounts, MPI.DOUBLE], w.array, root = 0)
     
     def formJacobian(snes, w, J, P, sendcounts, ww):
@@ -158,12 +162,12 @@ for i in range(1, 4):
     
     mat = PETSc.Mat().create()
     mat.setSizes((3*Nt*Nx+2*Nx,3*Nt*Nx+2*Nx))
-    mat.setType("mpiaij")
+    mat.setType("mpiaij")    # mpiaij , seqaij , seqdense , mpidense , seqbaij , mpibaij 
     mat.setFromOptions()
-    mat.setPreallocationNNZ(100)
+    mat.setPreallocationNNZ(10)
     # mat.setOption(option=19, flag=0)
     
-    
+    # ww[1:]=0.
     args = [sendcounts, ww]
     snes.setJacobian(formJacobian, mat, mat, args)
     
@@ -175,15 +179,20 @@ for i in range(1, 4):
         snes.setInitialGuess(formInitguess, args)
     
     # snes.setType("nasm")
-    snes.getKSP().setType('fgmres')
     
-    ksp = snes.getKSP()
+                                                          # KSP : Krylov-subspace-preconditioner (linear solver)
+    snes.getKSP().setType('lgmres')                       # Krylov subspace technique : 'gmres', 'fgmres' , 'lgmres', 'bcgs', ...
+    
+    ksp = snes.getKSP() #
     ksp = PETSc.KSP().create()
     pc = ksp.getPC()
     opts = PETSc.Options()
-    ksp.setTolerances(rtol=tol)
-    opts["pc_type"] = "lu"
-    opts["mat_mumps_icntl_23"] = 16000
+    ksp.setTolerances(rtol=tol, atol=6.e-06, max_it=5000)#,atol=6.e-06)#, max_it=30)                          
+                                                # rtol : the relative convergence tolerance 
+                                                # abstol (atol) : the absolute convergence tolerance of the residual norm
+                                                # maxits (max_it) : maximum number of iterations to use 
+    opts["pc_type"] = "lu"                     # "lu", "ilu", "gamg" ,"hypre", "bjacobi","jacobi", "sor", "asm",  "gasm", "telescope"
+    opts["mat_mumps_icntl_23"] = 16000          # max size of the working memory (MB) that can allocate per processor 
     # ksp.setInitialGuessNonzero(True)
     ksp.setFromOptions()
     
