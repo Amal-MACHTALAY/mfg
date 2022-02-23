@@ -4,15 +4,15 @@ from pyccel.decorators import pure
 @pure
 def U(rho:'float', u_max:'float', rho_jam:'float'): # Greenshields desired speed
     return u_max*(1-rho/rho_jam)
-@pure
-def f_mfg_LWR(uu:'float',r:'float', u_max:'float', rho_jam:'float' ):
-    return 0.5*((U(r, u_max, rho_jam)-uu)**2) # MFG-LWR
-@pure
-def f_star_p_LWR(p:'float', r:'float', u_max:'float', rho_jam:'float'): # 0<=u<=u_max
-    return U(r, u_max, rho_jam)-p # MFG-LWR
-@pure
-def f_star_LWR(p:'float', r:'float', u_max:'float', rho_jam:'float'): # p=Vx
-    return -0.5*(p**2)+U(r, u_max, rho_jam)*p # MFG-LWR
+# @pure
+# def f_mfg_LWR(uu:'float',r:'float', u_max:'float', rho_jam:'float' ):
+#     return 0.5*((U(r, u_max, rho_jam)-uu)**2) # MFG-LWR
+# @pure
+# def f_star_p_LWR(p:'float', r:'float', u_max:'float', rho_jam:'float'): # 0<=u<=u_max
+#     return U(r, u_max, rho_jam)-p # MFG-LWR
+# @pure
+# def f_star_LWR(p:'float', r:'float', u_max:'float', rho_jam:'float'): # p=Vx
+#     return -0.5*(p**2)+U(r, u_max, rho_jam)*p # MFG-LWR
 
 @pure
 def rho_int(rho_a: float, rho_b: float, L: float, gamma: float, s: float):
@@ -53,6 +53,18 @@ def f_star_p(p:'float', r:'float', u_max:'float', rho_jam:'float'): # 0<=u<=u_ma
 @pure
 def f_star(p:'float', r:'float', u_max:'float', rho_jam:'float'): # p=Vx
     return -0.5*(p**2)+U(r, u_max, rho_jam)*p # MFG-LWR
+@pure
+def f_star_p_der_arg1(p:'float', r:'float', u_max:'float', rho_jam:'float'):
+    return -1.0
+@pure   
+def f_star_p_der_arg2(p:'float', r:'float', u_max:'float', rho_jam:'float'):   
+    return -(u_max/rho_jam)
+@pure
+def f_star_der_arg1(p:'float', r:'float', u_max:'float', rho_jam:'float'):
+    return -p+U(r, u_max, rho_jam)
+@pure
+def f_star_der_arg2(p:'float', r:'float', u_max:'float', rho_jam:'float'):
+    return -(u_max/rho_jam)*p
 
 ##########################Quadrature###########################################
 def rho_int_1(s: float):
@@ -140,7 +152,7 @@ def to_sol(new_Nt:'int', old_Nx:'int', sol:'float[:]', rho:'float[:,:]', u:'floa
 
 ################################Jacobian#######################################
 # @pure
-def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]', 
+def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',u_max:'float', rho_jam:'float', 
                      Nt:'int', Nx:'int', dt:'float', dx:'float', eps:'float', ranges:'int[:,:]'):
     
     cmpt = 0
@@ -149,13 +161,14 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',
     for n in range(ranges[0][0], ranges[0][1]): #0, Nt
         for j in range(ranges[1][0], ranges[1][1]): # 0,Nx
             if j != 0:
-                row[cmpt] = Fr_idx(j,n,Nt); col[cmpt] = r_idx(j,n+1,Nt); data[cmpt] = 1
+                row[cmpt] = Fr_idx(j,n,Nt); col[cmpt] = r_idx(j,n+1,Nt); data[cmpt] = 1.
                 cmpt +=1
-                row[cmpt] = Fu_idx(j,n,Nt,Nx); col[cmpt] = u_idx(j,n,Nt,Nx); data[cmpt] = 1
+                row[cmpt] = Fu_idx(j,n,Nt,Nx); col[cmpt] = u_idx(j,n,Nt,Nx); data[cmpt] = 1.
                 cmpt +=1
-                row[cmpt] = FV_idx(j,n,Nt,Nx); col[cmpt] = V_idx(j,n,Nt,Nx); data[cmpt] = -1
+                row[cmpt] = FV_idx(j,n,Nt,Nx); col[cmpt] = V_idx(j,n,Nt,Nx); data[cmpt] = -1.
                 cmpt +=1
-                row[cmpt] = FV_idx(j,n,Nt,Nx); col[cmpt] = V_idx(j,n+1,Nt,Nx); data[cmpt] = 1-2*eps
+                row[cmpt] = FV_idx(j,n,Nt,Nx); col[cmpt] = V_idx(j,n+1,Nt,Nx); 
+                data[cmpt] = 1.0-2*eps+(dt/dx)*f_star_der_arg1((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(j-1,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
                 cmpt +=1
                 
                 if j!=1:
@@ -163,7 +176,19 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',
                     cmpt +=1
                     row[cmpt] = Fr_idx(j,n,Nt); col[cmpt] = u_idx(j-1,n,Nt,Nx); data[cmpt] = -(0.5*dt/dx)*w[r_idx(j-1,n,Nt)]
                     cmpt +=1
-                    row[cmpt] = FV_idx(j,n,Nt,Nx); col[cmpt] = V_idx(j-1,n+1,Nt,Nx); data[cmpt] = eps
+                    row[cmpt] = FV_idx(j,n,Nt,Nx); col[cmpt] = V_idx(j-1,n+1,Nt,Nx); 
+                    data[cmpt] = eps-(dt/dx)*f_star_der_arg1((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(j-1,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
+                    cmpt +=1
+                    row[cmpt]=FV_idx(j,n,Nt,Nx); col[cmpt]=r_idx(j,n,Nt); data[cmpt]=dt*f_star_der_arg2((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(j-1,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
+                    cmpt +=1
+                    #
+                    row[cmpt]=Fu_idx(j,n,Nt,Nx); col[cmpt]=V_idx(j,n+1,Nt,Nx); data[cmpt]=-(1/dx)*f_star_p_der_arg1((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(j-1,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
+                    cmpt +=1
+                    #
+                    row[cmpt]=Fu_idx(j,n,Nt,Nx); col[cmpt]=V_idx(j-1,n+1,Nt,Nx); data[cmpt]=(1/dx)*f_star_p_der_arg1((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(j-1,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
+                    cmpt +=1
+                    #
+                    row[cmpt]=Fu_idx(j,n,Nt,Nx); col[cmpt]=r_idx(j,n,Nt); data[cmpt]=-f_star_p_der_arg2((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(j-1,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
                     cmpt +=1
                 
                 elif j==1:
@@ -171,7 +196,19 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',
                     cmpt +=1
                     row[cmpt] = Fr_idx(j,n,Nt); col[cmpt] = u_idx(Nx,n,Nt,Nx); data[cmpt] = -(0.5*dt/dx)*w[r_idx(Nx,n,Nt)]
                     cmpt +=1
-                    row[cmpt] = FV_idx(j,n,Nt,Nx); col[cmpt] = V_idx(Nx,n+1,Nt,Nx); data[cmpt] = eps
+                    row[cmpt] = FV_idx(j,n,Nt,Nx); col[cmpt] = V_idx(Nx,n+1,Nt,Nx); 
+                    data[cmpt] = eps-(dt/dx)*f_star_der_arg1((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(Nx,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
+                    cmpt +=1
+                    row[cmpt]=FV_idx(j,n,Nt,Nx); col[cmpt]=r_idx(j,n,Nt); data[cmpt]=dt*f_star_der_arg2((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(Nx,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
+                    cmpt +=1
+                    #
+                    row[cmpt]=Fu_idx(j,n,Nt,Nx); col[cmpt]=V_idx(j,n+1,Nt,Nx); data[cmpt]=-(1/dx)*f_star_p_der_arg1((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(Nx,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
+                    cmpt +=1
+                    #
+                    row[cmpt]=Fu_idx(j,n,Nt,Nx); col[cmpt]=V_idx(Nx,n+1,Nt,Nx); data[cmpt]=(1/dx)*f_star_p_der_arg1((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(Nx,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
+                    cmpt +=1
+                    #
+                    row[cmpt]=Fu_idx(j,n,Nt,Nx); col[cmpt]=r_idx(j,n,Nt); data[cmpt]=-f_star_p_der_arg2((w[V_idx(j,n+1,Nt,Nx)]-w[V_idx(Nx,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
                     cmpt +=1
 
                 elif j!=Nx:
