@@ -262,10 +262,10 @@ def jacobian(w,row,col,data): # Ignoring the forward-backward coupling  parts
                 cmpt +=1
             if j==1:
                 # 1 J[Fr_idx(j,n),r_idx(Nx,n)]=(0.5*dt/dx)*w[u_idx(Nx,n)]-0.5 # F_rho - rho
-                row[cmpt]=Fr_idx(j,n); col[cmpt]=r_idx(Nx,n); data[cmpt]=(0.5*dt/dx)*w[u_idx(Nx,n)]-0.5
+                row[cmpt]=Fr_idx(j,n); col[cmpt]=r_idx(Nx,n); data[cmpt]=-(0.5*dt/dx)*w[u_idx(Nx,n)]-0.5
                 cmpt +=1
                 # 2 J[Fr_idx(Nx+j,n),r_idx(Nx+Nx,n)]=(0.5*dt/dx)*w[u_idx(Nx+Nx,n)]-0.5 # F_rho - rho
-                row[cmpt]=Fr_idx(Nx+j,n); col[cmpt]=r_idx(Nx+Nx,n); data[cmpt]=(0.5*dt/dx)*w[u_idx(Nx+Nx,n)]-0.5
+                row[cmpt]=Fr_idx(Nx+j,n); col[cmpt]=r_idx(Nx+Nx,n); data[cmpt]=-(0.5*dt/dx)*w[u_idx(Nx+Nx,n)]-0.5
                 cmpt +=1
                 # 1 J[Fr_idx(j,n),u_idx(Nx,n)]=-(0.5*dt/dx)*w[r_idx(Nx,n)] # F_rho - u
                 row[cmpt]=Fr_idx(j,n); col[cmpt]=u_idx(Nx,n); data[cmpt]=-(0.5*dt/dx)*w[r_idx(Nx,n)]
