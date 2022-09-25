@@ -35,3 +35,4 @@ $ mpirun -n 2 python mfg_parallel_petsc_pyccel.py -pc_factor_mat_solver_type mum
 - `-snes_monitor` monitor for snes sover
 - `-snes_converged_reason` convergence reason for snes solver
 - `-ksp_converged_reason` convergence reason for ksp solver
+- `--ksp_error_if_not_converged` stop immediately when a problem is detected
