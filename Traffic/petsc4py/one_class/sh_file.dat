@@ -1,0 +1,26 @@
+#!/bin sh                                                                                                                                                                                                  
+#SBATCH -p longq                                                                                                                                                                                           
+#SBATCH -n 2                                                                                                                                                                                               
+##SBATCH --partition=longq  # partition name                                                                                                                                                               
+##SBATCH --job-name=petsc_lwr    # job name                                                                                                                                                                
+#SBATCH --output=petsc_lwr.out  # output file name                                                                                                                                                         
+#SBATCH --error=petsc_lwr.err   # error file name                                                                                                                                                          
+##SBATCH --nodes=1           # number of nodes                                                                                                                                                             
+##SBATCH --time=3-00:00:00   # running time                                                                                                                                                                
+
+module purge
+#module load openmpi/mlnx/gcc/64/3.1.1rc1                                                                                                                                                                  
+#module load Python/3.8.6-GCCcore-10.2.0                                                                                                                                                                   
+#module load Python/3.8.2-GCCcore-9.3.0 # add modules                                                                                                                                                      
+module load SciPy-bundle/2020.03-foss-2020a-Python-3.8.2
+module load PETSc/3.16.1-GCC-9.3.0-Python-3.8.2
+#pip install petsc4py                                                                                                                                                                                      
+#pip3 install pyccel                                                                                                                                                                                        
+#python tools.py                                                                                                                                                                                           
+#pyccel modules.py                                                                                                                                                                                         
+
+#python mpi_petsc_pyccel_main.py                                                                                                                                                                           
+mpirun -n 2 python mpi_petsc_pyccel_main.py -ksp_rmonitor -snes_converged_reason -ksp_converged_reason -snes_monitor -snes_linesearch_type l2 -snes_lag_jacobian -2 -snes_lag_preconditioner -2
+
+
+

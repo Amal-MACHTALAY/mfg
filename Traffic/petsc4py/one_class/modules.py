@@ -235,7 +235,7 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',u
                 cmpt +=1
                 # F_u /rho
                 row[cmpt]=Fu_idx(j,n,Nt,Nx); col[cmpt]=r_idx(j,n,Nt); 
-                data[cmpt]=-f_starp_r((w[V_idx(r,n+1,Nt,Nx)]-w[V_idx(j,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)])
+                data[cmpt]=-f_starp_r((w[V_idx(r,n+1,Nt,Nx)]-w[V_idx(j,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)],u_max, rho_jam)
                 cmpt +=1
                 # F_u / u
                 row[cmpt] = Fu_idx(j,n,Nt,Nx); col[cmpt] = u_idx(j,n,Nt,Nx); data[cmpt] = 1.
