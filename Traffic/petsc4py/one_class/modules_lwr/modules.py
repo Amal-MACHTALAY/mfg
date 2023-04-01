@@ -49,59 +49,6 @@ def f_star_u(p:'float', r:'float', u:'float', u_max:'float', rho_jam:'float'):
     return 0.0
     
     
-'''************************ functions Separable **********************************'''
-# @pure
-# def f_mfg(u:'float', rho:'float', u_max:'float', rho_jam:'float'): 
-#     return 0.5*((u/u_max)**2)-(u/u_max)+(rho/rho_jam)
-# @pure
-# def f_starp(p:'float', r:'float', u_max:'float', rho_jam:'float'): # 0<=u<=u_max # f_star_p
-#     return max(min(u_max*(1-p*u_max),u_max),0.0) # MFG-Separable
-# @pure
-# def f_star(p:'float', r:'float', u:'float', u_max:'float', rho_jam:'float'): # p=Vx
-#     return u*p+f_mfg(u,r,u_max,rho_jam) # MFG-Separable
-# @pure
-# def f_starp_p(p:'float', r:'float', u_max:'float', rho_jam:'float'):  # f_star_p_der_arg1
-#     return -u_max**2
-# @pure   
-# def f_starp_r(p:'float', r:'float', u_max:'float', rho_jam:'float'): # f_star_p_der_arg2
-#     return 0.0
-# @pure
-# def f_star_p(p:'float', r:'float', u:'float', u_max:'float', rho_jam:'float'):  # f_star_der_arg1
-#     return u
-# @pure
-# def f_star_r(p:'float', r:'float', u:'float', u_max:'float', rho_jam:'float'):  # f_star_der_arg2
-#     return 1/rho_jam
-# @pure
-# def f_star_u(p:'float', r:'float', u:'float', u_max:'float', rho_jam:'float'):
-#     return p+u/(u_max**2)-1/u_max
-    
-
-'''************************ functions NonSeparable **********************************'''
-# @pure
-# def f_mfg(u:'float', rho:'float', u_max:'float', rho_jam:'float'): 
-#     return 0.5*((u/u_max)**2)-(u/u_max)+(u*rho)/(u_max*rho_jam)
-# @pure
-# def f_starp(p:'float', r:'float', u_max:'float', rho_jam:'float'): # 0<=u<=u_max # f_star_p
-#     return max(min(u_max*(1-r/rho_jam-p*u_max),u_max),0.0) # MFG-Separable
-# @pure
-# def f_star(p:'float', r:'float', u:'float', u_max:'float', rho_jam:'float'): # p=Vx
-#     return u*p+f_mfg(u,r,u_max,rho_jam) # MFG-Separable
-# @pure
-# def f_starp_p(p:'float', r:'float', u_max:'float', rho_jam:'float'):  # f_star_p_der_arg1
-#     return -u_max**2
-# @pure   
-# def f_starp_r(p:'float', r:'float', u_max:'float', rho_jam:'float'): # f_star_p_der_arg2
-#     return -u_max/rho_jam
-# @pure
-# def f_star_p(p:'float', r:'float', u:'float', u_max:'float', rho_jam:'float'):  # f_star_der_arg1
-#     return u
-# @pure
-# def f_star_r(p:'float', r:'float', u:'float', u_max:'float', rho_jam:'float'):  # f_star_der_arg2
-#     return u/(u_max*rho_jam)
-# @pure
-# def f_star_u(p:'float', r:'float', u:'float', u_max:'float', rho_jam:'float'):
-#     return p+u/(u_max**2)-1/u_max+r/(u_max*rho_jam)
-    
 """************************************************************************************"""
 
 @pure
@@ -263,10 +210,6 @@ def compute_jacobian(w:'float[:]', row:'int[:]', col:'int[:]', data:'float[:]',u
                 row[cmpt] = Fu_idx(j,n,Nt,Nx); col[cmpt] = u_idx(j,n,Nt,Nx); data[cmpt] = 1.
                 cmpt +=1
                 # F_u / V
-                # u_min=u_max*(1-u_max*(w[V_idx(r,n+1,Nt,Nx)]-w[V_idx(j,n+1,Nt,Nx)])/dx)
-                # valu = 0.0
-                # if 0.0<u_min:
-                #     if u_min<u_max:
                 valu = (1/dx)*f_starp_p((w[V_idx(r,n+1,Nt,Nx)]-w[V_idx(j,n+1,Nt,Nx)])/dx,w[r_idx(j,n,Nt)], u_max, rho_jam)
                 row[cmpt]=Fu_idx(j,n,Nt,Nx); col[cmpt]=V_idx(r,n+1,Nt,Nx); 
                 data[cmpt]=-valu
