@@ -1,0 +1,65 @@
+Nx=15, Nt=60
+dx=0.0667, dt=0.05
+CPU time : 0.10828208178281784 Using Nx = 15 And Nt= 60 procs 56
+Number of SNES iterations = : 8
+Number of Linear iterations = 8
+Nx=30, Nt=120
+dx=0.0333, dt=0.025
+CPU time : 0.2156091220676899 Using Nx = 30 And Nt= 120 procs 56
+Number of SNES iterations = : 5
+Number of Linear iterations = 5
+Nx=60, Nt=240
+dx=0.0167, dt=0.0125
+CPU time : 0.9224090855568647 Using Nx = 60 And Nt= 240 procs 56
+Number of SNES iterations = : 5
+Number of Linear iterations = 5
+Nx=120, Nt=480
+dx=0.0083, dt=0.0063
+CPU time : 5.334642056375742 Using Nx = 120 And Nt= 480 procs 56
+Number of SNES iterations = : 6
+Number of Linear iterations = 6
+Nx=240, Nt=960
+dx=0.0042, dt=0.0031
+CPU time : 26.445174302905798 Using Nx = 240 And Nt= 960 procs 56
+Number of SNES iterations = : 6
+Number of Linear iterations = 6
+Nx=480, Nt=1920
+dx=0.0021, dt=0.0016
+CPU time : 154.74439372494817 Using Nx = 480 And Nt= 1920 procs 56
+Number of SNES iterations = : 7
+Number of Linear iterations = 7
+Nx=960, Nt=3840
+dx=0.001, dt=0.0008
+CPU time : 1277.6124561894685 Using Nx = 960 And Nt= 3840 procs 56
+Number of SNES iterations = : 9
+Number of Linear iterations = 9
+Nx=1920, Nt=7680
+dx=0.0005, dt=0.0004
+Nx=1920, Nt=7680
+dx=0.0005, dt=0.0004
+CPU time : 13025.00117349 Using Nx = 1920 And Nt= 7680 procs 56
+Number of SNES iterations = : 10
+Number of Linear iterations = 10
+Nx=3840, Nt=15360
+dx=0.0003, dt=0.0002
+SUPERLU_MALLOC fails for perm. at line 55 in file /home/amal.machtalay/petsc/arch-linux-c-opt/externalpackages/git.superlu_dist/SRC/get_perm_c.c
+SUPERLU_MALLOC fails for perm. at line 55 in file /home/amal.machtalay/petsc/arch-linux-c-opt/externalpackages/git.superlu_dist/SRC/get_perm_c.c
+SUPERLU_MALLOC fails for perm. at line 55 in file /home/amal.machtalay/petsc/arch-linux-c-opt/externalpackages/git.superlu_dist/SRC/get_perm_c.c
+   Current memory used:  2831278464 bytes
+   Maximum memory used:  2831278464 bytes
+***Memory allocation failed for CompressGraph: keys. Requested size: 1415639040 bytes
+SUPERLU_MALLOC fails for perm. at line 55 in file /home/amal.machtalay/petsc/arch-linux-c-opt/externalpackages/git.superlu_dist/SRC/get_perm_c.c
+SUPERLU_MALLOC fails for perm. at line 55 in file /home/amal.machtalay/petsc/arch-linux-c-opt/externalpackages/git.superlu_dist/SRC/get_perm_c.c
+SUPERLU_MALLOC fails for perm. at line 55 in file /home/amal.machtalay/petsc/arch-linux-c-opt/externalpackages/git.superlu_dist/SRC/get_perm_c.c
+--------------------------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code. Per user-direction, the job has been aborted.
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+mpirun detected that one or more processes exited with non-zero status, thus causing
+the job to be terminated. The first process to do so was:
+
+  Process name: [[18237,1],6]
+  Exit code:    255
+--------------------------------------------------------------------------
+
