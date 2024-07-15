@@ -5,5 +5,5 @@
 2-Parallel (mpi4py, Pyccel, PETSc): "Traffic/petsc4py" folder
 ### Reference
 - [arXiv paper](https://arxiv.org/abs/2306.13543)
-- To cite: ```Abderrahmane Habbal, Imad Kissami, Amal Machtalay and Ahmed Ratnani. “Computational investigations of a two-class traffic flow model: mean-field and microscopic dynamics.” (2023).```
+- To cite: ``` Machtalay, Amal and HABBAL, Abderrahmane and Ratnani, Ahmed and Kissami, Imad, Computational Investigations of a Multi-Class Traffic Flow Model: Mean-Field and Microscopic Dynamics. Available at SSRN: https://ssrn.com/abstract=4880017 or http://dx.doi.org/10.2139/ssrn.4880017 ```
   
