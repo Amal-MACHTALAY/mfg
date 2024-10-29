@@ -15,8 +15,8 @@ def integral(a,b,rho_int):
     I=integrate.quad(x2, a, b)
     return I[0]
 
-''' CE : Explicit Lax-Friedrichs scheme 
-    HJB : Implicit upwind difference scheme
+''' CE : Explicit forward Lax-Friedrichs scheme 
+    HJB : Exlicit backward upwind difference scheme
 '''
 def newton_func(w,f_starp,f_star,rho_int,Nt,Nx,dt,dx,eps,x,VT):
     FF=np.zeros(3*Nt*Nx+2*Nx)
